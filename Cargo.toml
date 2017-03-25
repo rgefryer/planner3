@@ -1,0 +1,18 @@
+[package]
+name = "planner3"
+version = "0.1.0"
+authors = ["Richard Fryer <richard@richardfryer.com>"]
+
+[dependencies]
+rocket = "0.2.2"
+rocket_codegen = "0.2.2"
+serde = "0.9"
+serde_derive = "0.9"
+serde_json = "0.9"
+regex = "0.2"
+arena-tree = "0.3.0"
+
+[dependencies.rocket_contrib]
+version = "*"
+default-features = false
+features = ["handlebars_templates"]

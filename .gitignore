@@ -1,0 +1,4 @@
+target/
+**/*.rs.bk
+planner3.sublime*
+config.txt
