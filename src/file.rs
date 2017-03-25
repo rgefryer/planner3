@@ -1,6 +1,7 @@
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
+use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LineNode {
@@ -95,58 +96,39 @@ impl ConfigLines {
 
     fn process_line(&mut self, input_line: &str, line_num: u32) -> Result<(), String> {
 
-        let mut line = input_line;
+        // Avoid unnecessary recompilation of the regular expressions
+        lazy_static! {
+            static ref COMMENT_RE: Regex = Regex::new(r"^(?P<content>[^#]*).*$").unwrap();
+            static ref BLANK_RE: Regex = Regex::new(r"^\s*$").unwrap();
+            static ref NODE_RE: Regex = Regex::new(r"^(?P<indent>\s*)(?P<name>[\w\]\[/\s]+)$")
+                .unwrap();
+            static ref ATTR_RE: Regex =
+                Regex::new(r"^\s*\-\s*(?P<key>[\w\-\.]+)\s*:\s*(?P<value>.*)$").unwrap();
+        }
 
-        // Discard trailing comments
-        match line.find('#') {
-            None => {}
-            Some(ix) => {
-                line = &line[0..ix];
-            }
-        };
-
-        // Trim the RHS
-        line = line.trim_right();
-
-        // Get the length
-        let len_with_indent = line.len();
-
-        // Trim the LHS
-        line = line.trim_left();
-
-        // Get the indent
-        let indent = len_with_indent - line.len();
-
-        // Discard empty lines
-        if line.len() == 0 {
+        // Strip comments, ignore blank lines.
+        let content = &COMMENT_RE.captures(input_line).unwrap()["content"];
+        if BLANK_RE.is_match(content) {
             return Ok(());
         }
 
-        // Work out if this is a node or an attribute.
-        let node = match line.find("- ") {
-            Some(0) => false,
-            _ => true,
+        // Try to parse as a node, or failing that as an attribute
+        match NODE_RE.captures(content) {
+            Some(c) => {
+                let indent = c["indent"].len();
+                self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"]));
+            }
+            None => {
+                match ATTR_RE.captures(content) {
+                    Some(c) => {
+                        self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));
+                    }
+                    None => {
+                        return Err(format!("Unable to process line {}: {}", line_num, input_line));
+                    }
+                };
+            }
         };
-
-        // If new node, write note line
-        if node {
-            self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, line));
-        }
-        // Else if attribute, splt the attribute and values and
-        // write attribute line
-        else {
-            line = line[2..].trim_left();
-            match line.find(':') {
-                Some(0) => return Err("Attribute with no key".to_string()),
-                Some(pos) => {
-                    let attr_name = line[..pos].trim();
-                    let attr_val = line[pos + 1..].trim();
-
-                    self.add_line(Line::new_attribute_line(attr_name, attr_val));
-                }
-                None => return Err("Attribute with no value".to_string()),
-            };
-        }
 
         Ok(())
     }

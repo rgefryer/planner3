@@ -11,6 +11,7 @@ serde_derive = "0.9"
 serde_json = "0.9"
 regex = "0.2"
 arena-tree = "0.3.0"
+lazy_static = "0.2"
 
 [dependencies.rocket_contrib]
 version = "*"
