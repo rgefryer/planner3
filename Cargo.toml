@@ -10,6 +10,7 @@ serde = "0.9"
 serde_derive = "0.9"
 serde_json = "0.9"
 regex = "0.2"
+typed-arena = "1.2.0"
 arena-tree = "0.3.0"
 lazy_static = "0.2"
 

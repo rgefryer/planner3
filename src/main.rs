@@ -8,17 +8,28 @@ extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+extern crate typed_arena;
 extern crate arena_tree;
 
 mod file;
-
-use file::ConfigLines;
+mod nodes;
 
 fn main() {
 
-    match ConfigLines::new_from_file("config.txt") {
-        Ok(_) => {
-            println!("Successful");
+    match file::ConfigLines::new_from_file("config.txt") {
+        Ok(mut config) => {
+            let arena = typed_arena::Arena::new();
+            match nodes::ConfigNode::new_from_config(&arena, &mut config, true, 0) {
+                Ok(root) => {
+                    for x in root.descendants() {
+                        println!("{}", x.data.borrow().name);
+                    }
+                    println!("Successful");
+                }
+                Err(e) => {
+                    println!("Failed: {}", e);
+                }
+            };
         }
         Err(e) => {
             println!("Failed: {}", e);
