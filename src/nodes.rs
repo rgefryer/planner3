@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use file;
 use typed_arena;
 use arena_tree;
+use regex::Regex;
 
 pub struct ConfigNode {
     pub name: String,
@@ -24,6 +25,10 @@ pub struct ConfigNode {
     num_attrs: u32,
 }
 
+// Avoid unnecessary recompilation of the regular expressions
+lazy_static! {
+    static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:chart)|(?:people))\]$").unwrap();
+}
 
 impl ConfigNode {
     fn new(name: &str, level: u32, indent: u32, line_num: u32) -> ConfigNode {
@@ -90,16 +95,69 @@ impl ConfigNode {
         }
 
         // Add any children
-        while let Some(file::Line::Node(file::LineNode { line_num: _, indent, name: _ })) =
+        while let Some(file::Line::Node(file::LineNode { line_num: _, indent, name })) =
             config.peek_line() {
             if indent <= node_indent {
                 break;
             }
-            let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
-                try!(ConfigNode::new_from_config(arena, config, false, level + 1));
-            node.append(child);
+
+            if is_root && ROOT_NODE_RE.is_match(&name) {
+                try!(node.data.borrow_mut().read_root_config(config));
+            } else {
+                let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
+                    try!(ConfigNode::new_from_config(arena, config, false, level + 1));
+                node.append(child);
+            }
         }
 
         Ok(node)
+    }
+
+    // Handle any "nodes" that define config at the root level
+    fn read_root_config(&mut self, mut config: &mut file::ConfigLines) -> Result<(), String> {
+
+        if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
+            config.get_line() {
+
+            let c = ROOT_NODE_RE.captures(&name).unwrap();
+            if &c["name"] == "chart" {
+                try!(self.read_chart_config(&mut config));
+            } else if &c["name"] == "people" {
+                try!(self.read_people_config(&mut config));
+            } else {
+                return Err(format!("Internal error: read_root_config \
+                                    called with unexpected node {} at line {}",
+                                   name,
+                                   line_num));
+            }
+        } else {
+            // Should not have been called without a Node to read.
+            return Err("Internal error: read_root_config called without a node to read"
+                           .to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Store any configuration stored under [chart]
+    fn read_chart_config(&mut self, config: &mut file::ConfigLines) -> Result<(), String> {
+        println!("Reading chart config");
+        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
+            config.peek_line() {
+            config.get_line();
+            try!(self.add_attribute(key, value));
+        }
+        Ok(())
+    }
+
+    /// Store any configuration stored under [people]
+    fn read_people_config(&mut self, config: &mut file::ConfigLines) -> Result<(), String> {
+        println!("Reading people config");
+        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
+            config.peek_line() {
+            config.get_line();
+            try!(self.add_attribute(key, value));
+        }
+        Ok(())
     }
 }
