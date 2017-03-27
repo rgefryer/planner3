@@ -4,23 +4,43 @@ use typed_arena;
 use arena_tree;
 use regex::Regex;
 
-pub struct ConfigNode {
-    pub name: String,
-    line_num: u32,
-    indent: u32,
-    level: u32, // Root node is level 0
-
+struct RootConfigData {
     // People are only defined on the root node
     //people: HashMap<String, PersonData>,
+    weeks: u32,
+}
+
+impl RootConfigData {
+    fn new() -> RootConfigData {
+        RootConfigData { weeks: 0 }
+    }
+}
+
+struct NodeConfigData {
+    // Notes are problems to display on the chart
+    notes: Vec<String>, 
 
     // Cells are only used on leaf nodes
     //cells: ChartTimeRow,
 
     // Period during which the task can be worked on
     //period: Option<ChartPeriod>,
+}
 
-    // Notes are problems to display on the chart
-    notes: Vec<String>,
+impl NodeConfigData {
+    fn new() -> NodeConfigData {
+        NodeConfigData { notes: Vec::new() }
+    }
+}
+
+pub struct ConfigNode {
+    pub name: String,
+    line_num: u32,
+    indent: u32,
+    level: u32, // Root node is level 0
+
+    root_data: Option<RootConfigData>,
+    node_data: Option<NodeConfigData>,
 
     num_attrs: u32,
 }
@@ -31,17 +51,26 @@ lazy_static! {
 }
 
 impl ConfigNode {
-    fn new(name: &str, level: u32, indent: u32, line_num: u32) -> ConfigNode {
+    fn new(name: &str, level: u32, indent: u32, line_num: u32, is_root: bool) -> ConfigNode {
         ConfigNode {
             name: name.to_string(),
             line_num: line_num,
             indent: indent,
             level: level,
+            root_data: if is_root {
+                Some(RootConfigData::new())
+            } else {
+                None
+            },
+            node_data: if is_root {
+                None
+            } else {
+                Some(NodeConfigData::new())
+            },
             //attributes: HashMap::new(),
             //people: HashMap::new(),
             //cells: ChartTimeRow::new(),
             //period: None,
-            notes: Vec::new(),
             num_attrs: 0,
         }
 
@@ -71,7 +100,11 @@ impl ConfigNode {
         // Create this node
         let mut node_indent = 0u32;
         let node: &'a arena_tree::Node<'a, RefCell<ConfigNode>> = if is_root {
-            arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new("root", 0, 0, 0))))
+            arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new("root",
+                                                                           0,
+                                                                           0,
+                                                                           0,
+                                                                           is_root))))
         } else {
             if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
                 config.get_line() {
@@ -79,7 +112,8 @@ impl ConfigNode {
                 arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new(&name,
                                                                                level,
                                                                                indent,
-                                                                               line_num))))
+                                                                               line_num,
+                                                                               is_root))))
             } else {
                 // Should not have been called without a Node to read.
                 return Err("Internal error: new_from_config called without a node to read"
@@ -144,8 +178,23 @@ impl ConfigNode {
         println!("Reading chart config");
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
+
             config.get_line();
-            try!(self.add_attribute(key, value));
+
+            if key == "weeks" {
+                if let Some(ref mut x) = self.root_data {
+                    x.weeks = try!(value.parse::<u32>().map_err(|e| format!("Error parsing weeks from [weeks] node: {}", e)));
+                }
+            }
+            else if key == "today" {
+                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+            }
+            else if key == "start-date" {
+                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+            }
+            else {
+                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+            }
         }
         Ok(())
     }
@@ -155,6 +204,7 @@ impl ConfigNode {
         println!("Reading people config");
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
+
             config.get_line();
             try!(self.add_attribute(key, value));
         }
