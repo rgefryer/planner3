@@ -76,7 +76,7 @@ impl ConfigLines {
 
     pub fn new_from_file(filename: &str) -> Result<ConfigLines> {
 
-        let f = File::open(filename).chain_err(|| format!("Error opening {}", filename))?;       
+        let f = File::open(filename).chain_err(|| format!("Error opening {}", filename))?;
         let mut file_data = ConfigLines::new();
         let mut line_num = 0;
 
@@ -86,7 +86,7 @@ impl ConfigLines {
             line_num += 1;
             let line = try!(line_rc.map_err(|e| e.to_string()));
             file_data.process_line(&line, line_num)
-                     .chain_err(|| format!("Failed reading {} at line {}", filename, line_num))?;
+                .chain_err(|| format!("Failed reading {} at line {}", filename, line_num))?;
         }
 
         Ok(file_data)
@@ -115,7 +115,7 @@ impl ConfigLines {
             Some(c) => {
                 let indent = c["indent"].len();
                 self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"]));
-            },
+            }
             None => {
                 let c = ATTR_RE.captures(content).ok_or("Unable to parse line")?;
                 self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));

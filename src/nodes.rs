@@ -18,14 +18,14 @@ impl RootConfigData {
 }
 
 struct NodeConfigData {
-    // Notes are problems to display on the chart
-    notes: Vec<String>, 
-
     // Cells are only used on leaf nodes
     //cells: ChartTimeRow,
 
     // Period during which the task can be worked on
     //period: Option<ChartPeriod>,
+    
+    // Notes are problems to display on the chart
+    notes: Vec<String>,
 }
 
 impl NodeConfigData {
@@ -96,7 +96,7 @@ impl ConfigNode {
          config: &'b mut file::ConfigLines,
          is_root: bool,
          level: u32)
-         -> Result<&'a arena_tree::Node<'a, RefCell<ConfigNode>>> {
+-> Result<&'a arena_tree::Node<'a, RefCell<ConfigNode>>>{
 
         // Create this node
         let mut node_indent = 0u32;
@@ -127,25 +127,38 @@ impl ConfigNode {
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
             config.get_line();
-            node.data.borrow_mut()
-                     .add_attribute(&key, &value)
-                     .chain_err(|| format!("Failed to add attribute {} to node at line {}", &key, node_line_num))?;
+            node.data
+                .borrow_mut()
+                .add_attribute(&key, &value)
+                .chain_err(|| {
+                               format!("Failed to add attribute {} to node at line {}",
+                                       &key,
+                                       node_line_num)
+                           })?;
         }
 
         // Add any children
-        while let Some(file::Line::Node(file::LineNode { line_num: line_num, indent, name })) =
+        while let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
             config.peek_line() {
             if indent <= node_indent {
                 break;
             }
 
             if is_root && ROOT_NODE_RE.is_match(&name) {
-                node.data.borrow_mut()
-                         .read_root_config(config)
-                         .chain_err(|| format!("Failed to read node containing root config at line {}", line_num))?;
+                node.data
+                    .borrow_mut()
+                    .read_root_config(config)
+                    .chain_err(|| {
+                                   format!("Failed to read node containing root config at line {}",
+                                           line_num)
+                               })?;
             } else {
                 let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
-                    ConfigNode::new_from_config(arena, config, false, level + 1).chain_err(|| format!("Failed to generate child node from config at line {}", line_num))?;
+                    ConfigNode::new_from_config(arena, config, false, level + 1).chain_err(|| {
+                                       format!("Failed to generate child node \
+                                               from config at line {}",
+                                               line_num)
+                                   })?;
                 node.append(child);
             }
         }
@@ -156,7 +169,7 @@ impl ConfigNode {
     // Handle any "nodes" that define config at the root level
     fn read_root_config(&mut self, mut config: &mut file::ConfigLines) -> Result<()> {
 
-        if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
+        if let Some(file::Line::Node(file::LineNode { line_num: _, indent: _, name })) =
             config.get_line() {
 
             let c = ROOT_NODE_RE.captures(&name).unwrap();
@@ -185,16 +198,14 @@ impl ConfigNode {
 
             if key == "weeks" {
                 if let Some(ref mut x) = self.root_data {
-                    x.weeks = value.parse::<u32>().chain_err(|| "Error parsing weeks from [weeks] node")?;
+                    x.weeks = value.parse::<u32>()
+                        .chain_err(|| "Error parsing weeks from [weeks] node")?;
                 }
-            }
-            else if key == "today" {
+            } else if key == "today" {
                 bail!(format!("Unrecognised attribute {} in [weeks] node", key));
-            }
-            else if key == "start-date" {
+            } else if key == "start-date" {
                 bail!(format!("Unrecognised attribute {} in [weeks] node", key));
-            }
-            else {
+            } else {
                 bail!(format!("Unrecognised attribute {} in [weeks] node", key));
             }
         }
