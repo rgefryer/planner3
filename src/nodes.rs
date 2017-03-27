@@ -3,6 +3,7 @@ use file;
 use typed_arena;
 use arena_tree;
 use regex::Regex;
+use errors::*;
 
 struct RootConfigData {
     // People are only defined on the root node
@@ -76,7 +77,7 @@ impl ConfigNode {
 
     }
 
-    fn add_attribute(&mut self, key: String, value: String) -> Result<(), String> {
+    fn add_attribute(&mut self, key: &String, value: &String) -> Result<()> {
 
         // Nonsense code to avoid compiler complaints
         self.num_attrs += 1;
@@ -95,10 +96,11 @@ impl ConfigNode {
          config: &'b mut file::ConfigLines,
          is_root: bool,
          level: u32)
-         -> Result<&'a arena_tree::Node<'a, RefCell<ConfigNode>>, String> {
+         -> Result<&'a arena_tree::Node<'a, RefCell<ConfigNode>>> {
 
         // Create this node
         let mut node_indent = 0u32;
+        let mut node_line_num = 0u32;
         let node: &'a arena_tree::Node<'a, RefCell<ConfigNode>> = if is_root {
             arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new("root",
                                                                            0,
@@ -109,6 +111,7 @@ impl ConfigNode {
             if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
                 config.get_line() {
                 node_indent = indent;
+                node_line_num = line_num;
                 arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new(&name,
                                                                                level,
                                                                                indent,
@@ -116,8 +119,7 @@ impl ConfigNode {
                                                                                is_root))))
             } else {
                 // Should not have been called without a Node to read.
-                return Err("Internal error: new_from_config called without a node to read"
-                               .to_string());
+                bail!("Internal error: new_from_config called without a node to read");
             }
         };
 
@@ -125,21 +127,25 @@ impl ConfigNode {
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
             config.get_line();
-            try!(node.data.borrow_mut().add_attribute(key, value));
+            node.data.borrow_mut()
+                     .add_attribute(&key, &value)
+                     .chain_err(|| format!("Failed to add attribute {} to node at line {}", &key, node_line_num))?;
         }
 
         // Add any children
-        while let Some(file::Line::Node(file::LineNode { line_num: _, indent, name })) =
+        while let Some(file::Line::Node(file::LineNode { line_num: line_num, indent, name })) =
             config.peek_line() {
             if indent <= node_indent {
                 break;
             }
 
             if is_root && ROOT_NODE_RE.is_match(&name) {
-                try!(node.data.borrow_mut().read_root_config(config));
+                node.data.borrow_mut()
+                         .read_root_config(config)
+                         .chain_err(|| format!("Failed to read node containing root config at line {}", line_num))?;
             } else {
                 let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
-                    try!(ConfigNode::new_from_config(arena, config, false, level + 1));
+                    ConfigNode::new_from_config(arena, config, false, level + 1).chain_err(|| format!("Failed to generate child node from config at line {}", line_num))?;
                 node.append(child);
             }
         }
@@ -148,33 +154,29 @@ impl ConfigNode {
     }
 
     // Handle any "nodes" that define config at the root level
-    fn read_root_config(&mut self, mut config: &mut file::ConfigLines) -> Result<(), String> {
+    fn read_root_config(&mut self, mut config: &mut file::ConfigLines) -> Result<()> {
 
         if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
             config.get_line() {
 
             let c = ROOT_NODE_RE.captures(&name).unwrap();
             if &c["name"] == "chart" {
-                try!(self.read_chart_config(&mut config));
+                self.read_chart_config(&mut config).chain_err(|| "Failed to read [chart] node")?;
             } else if &c["name"] == "people" {
-                try!(self.read_people_config(&mut config));
+                self.read_people_config(&mut config).chain_err(|| "Failed to read [people] node")?;
             } else {
-                return Err(format!("Internal error: read_root_config \
-                                    called with unexpected node {} at line {}",
-                                   name,
-                                   line_num));
+                bail!("Internal error: Unexpected node type");
             }
         } else {
             // Should not have been called without a Node to read.
-            return Err("Internal error: read_root_config called without a node to read"
-                           .to_string());
+            bail!("Internal error: read_root_config called without a node to read");
         }
 
         Ok(())
     }
 
     /// Store any configuration stored under [chart]
-    fn read_chart_config(&mut self, config: &mut file::ConfigLines) -> Result<(), String> {
+    fn read_chart_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
         println!("Reading chart config");
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
@@ -183,30 +185,30 @@ impl ConfigNode {
 
             if key == "weeks" {
                 if let Some(ref mut x) = self.root_data {
-                    x.weeks = try!(value.parse::<u32>().map_err(|e| format!("Error parsing weeks from [weeks] node: {}", e)));
+                    x.weeks = value.parse::<u32>().chain_err(|| "Error parsing weeks from [weeks] node")?;
                 }
             }
             else if key == "today" {
-                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
             }
             else if key == "start-date" {
-                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
             }
             else {
-                return Err(format!("Unrecognised attribute {} in [weeks] node", key));
+                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
             }
         }
         Ok(())
     }
 
     /// Store any configuration stored under [people]
-    fn read_people_config(&mut self, config: &mut file::ConfigLines) -> Result<(), String> {
+    fn read_people_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
         println!("Reading people config");
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
 
             config.get_line();
-            try!(self.add_attribute(key, value));
+            self.add_attribute(&key, &value).chain_err(|| "Failed to add attribute")?;
         }
         Ok(())
     }

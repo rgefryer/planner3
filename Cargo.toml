@@ -13,6 +13,7 @@ regex = "0.2"
 typed-arena = "1.2.0"
 arena-tree = "0.3.0"
 lazy_static = "0.2"
+error-chain = "0.10.0"
 
 [dependencies.rocket_contrib]
 version = "*"
