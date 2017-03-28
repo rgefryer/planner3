@@ -23,9 +23,12 @@ extern crate error_chain;
 mod file;
 mod nodes;
 mod errors;
+mod charttime;
 
 use errors::*;
 
+// Standard main function for outputting chained errors.  See
+// run() for the actual work.
 fn main() {
     if let Err(ref e) = run() {
         use std::io::Write;
@@ -48,14 +51,18 @@ fn main() {
     }
 }
 
+// Main work function for the app
 fn run() -> Result<()> {
 
+    // Test code in development by reading in the config file and building
+    // the node tree.
     let mut config =
         file::ConfigLines::new_from_file("config.txt").chain_err(|| "Failed to read config")?;
     let arena = typed_arena::Arena::new();
     let root = nodes::ConfigNode::new_from_config(&arena, &mut config, true, 0)
         .chain_err(|| "Failed to set up nodes")?;
 
+    // Iterate through the node tree to demonstrate that it exists
     for x in root.descendants() {
         println!("{}", x.data.borrow().name);
     }

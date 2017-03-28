@@ -1,9 +1,12 @@
+// Types and methods for reading a config file into data
+// structures that can be easily iterated through.
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
 use regex::Regex;
 use errors::*;
 
+// Data from a line representing a new node
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LineNode {
     pub line_num: u32,
@@ -11,12 +14,14 @@ pub struct LineNode {
     pub name: String,
 }
 
+// Data from a line representing a node attribute
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LineAttribute {
     pub key: String,
     pub value: String,
 }
 
+// Enum encapsulating any type of "interesting" line
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Line {
     Node(LineNode),
@@ -117,7 +122,8 @@ impl ConfigLines {
                 self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"]));
             }
             None => {
-                let c = ATTR_RE.captures(content).ok_or("Unable to parse line")?;
+                let c = ATTR_RE.captures(content)
+                               .ok_or("Unable to parse line as a node or an attribute")?;
                 self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));
             }
         };

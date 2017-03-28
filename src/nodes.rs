@@ -4,16 +4,20 @@ use typed_arena;
 use arena_tree;
 use regex::Regex;
 use errors::*;
+use charttime::ChartTime;
 
 struct RootConfigData {
     // People are only defined on the root node
     //people: HashMap<String, PersonData>,
     weeks: u32,
+
+    // Today
+    now: u32,
 }
 
 impl RootConfigData {
     fn new() -> RootConfigData {
-        RootConfigData { weeks: 0 }
+        RootConfigData { weeks: 0, now: 0 }
     }
 }
 
@@ -131,7 +135,7 @@ impl ConfigNode {
                 .borrow_mut()
                 .add_attribute(&key, &value)
                 .chain_err(|| {
-                               format!("Failed to add attribute {} to node at line {}",
+                               format!("Failed to add attribute \"{}\" to node at line {}",
                                        &key,
                                        node_line_num)
                            })?;
@@ -199,14 +203,18 @@ impl ConfigNode {
             if key == "weeks" {
                 if let Some(ref mut x) = self.root_data {
                     x.weeks = value.parse::<u32>()
-                        .chain_err(|| "Error parsing weeks from [weeks] node")?;
+                        .chain_err(|| "Error parsing \"weeks\" from [chart] node")?;
                 }
-            } else if key == "today" {
-                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
+            } else if key == "now" {
+                let ct = value.parse::<ChartTime>()
+                    .chain_err(|| "Error parsing \"now\" from [chart] node")?;
+                if let Some(ref mut x) = self.root_data {
+                    x.now = ct.to_u32();
+                }
             } else if key == "start-date" {
-                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
+                bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
             } else {
-                bail!(format!("Unrecognised attribute {} in [weeks] node", key));
+                bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
             }
         }
         Ok(())
