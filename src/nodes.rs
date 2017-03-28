@@ -5,6 +5,7 @@ use arena_tree;
 use regex::Regex;
 use errors::*;
 use charttime::ChartTime;
+use chartdate::ChartDate;
 
 struct RootConfigData {
     // People are only defined on the root node
@@ -13,21 +14,28 @@ struct RootConfigData {
 
     // Today
     now: u32,
+
+    // Date of the first day in the chart
+    start_date: ChartDate,
 }
 
 impl RootConfigData {
     fn new() -> RootConfigData {
-        RootConfigData { weeks: 0, now: 0 }
+        RootConfigData {
+            weeks: 0,
+            now: 0,
+            start_date: ChartDate::new(),
+        }
     }
 }
 
 struct NodeConfigData {
     // Cells are only used on leaf nodes
-    //cells: ChartTimeRow,
+    //cells: ChartTimeRow
 
     // Period during which the task can be worked on
-    //period: Option<ChartPeriod>,
-    
+    //period: Option<ChartPeriod>
+
     // Notes are problems to display on the chart
     notes: Vec<String>,
 }
@@ -212,7 +220,11 @@ impl ConfigNode {
                     x.now = ct.to_u32();
                 }
             } else if key == "start-date" {
-                bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
+                let dt = value.parse::<ChartDate>()
+                    .chain_err(|| "Error parsing \"start-date\" from [chart] node")?;
+                if let Some(ref mut x) = self.root_data {
+                    x.start_date = dt;
+                }
             } else {
                 bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
             }

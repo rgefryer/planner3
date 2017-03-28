@@ -14,6 +14,7 @@ extern crate lazy_static;
 extern crate regex;
 extern crate typed_arena;
 extern crate arena_tree;
+extern crate chrono;
 
 // Import the macro. Don't forget to add `error-chain` in your
 // `Cargo.toml`!
@@ -24,6 +25,7 @@ mod file;
 mod nodes;
 mod errors;
 mod charttime;
+mod chartdate;
 
 use errors::*;
 

@@ -123,7 +123,7 @@ impl ConfigLines {
             }
             None => {
                 let c = ATTR_RE.captures(content)
-                               .ok_or("Unable to parse line as a node or an attribute")?;
+                    .ok_or("Unable to parse line as a node or an attribute")?;
                 self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));
             }
         };

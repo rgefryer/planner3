@@ -53,11 +53,13 @@ impl ChartTime {
 
         // Avoid unnecessary recompilation of the regular expressions
         lazy_static! {
-            static ref CHARTTIME_RE: Regex = Regex::new(r"^(?P<week>\d+)(?:/(?P<day>[1-5]))?(?:/(?P<quarter>[1-4]))?$").unwrap();
+            static ref CHARTTIME_RE: Regex = 
+                Regex::new(r"^(?P<week>\d+)(?:/(?P<day>[1-5]))?(?:/(?P<quarter>[1-4]))?$").unwrap();
         }
 
         let c = CHARTTIME_RE.captures(desc).ok_or(format!("Cannot parse ChartTime: {}", desc))?;
-        let week = c["week"].parse::<u32>().chain_err(|| format!("Cannot parse week out of: {}", desc))?;
+        let week = c["week"].parse::<u32>()
+            .chain_err(|| format!("Cannot parse week out of: {}", desc))?;
         let day = c.name("day").map(|d| d.as_str().parse::<u32>().unwrap());
         let quarter = c.name("quarter").map(|q| q.as_str().parse::<u32>().unwrap());
 
@@ -74,14 +76,15 @@ impl ChartTime {
 
     /// Return the quarter that this time starts at
     pub fn to_u32(&self) -> u32 {
-        (self.week - 1) * 20 + 
-        (self.day.unwrap_or(1) - 1) * 4 +
-        self.quarter.unwrap_or(1) - 1
+        (self.week - 1) * 20 + (self.day.unwrap_or(1) - 1) * 4 + self.quarter.unwrap_or(1) - 1
     }
 
     pub fn to_string(&self) -> String {
         if let Some(_) = self.quarter {
-            format!("{}/{}/{}", self.week, self.day.unwrap(), self.quarter.unwrap())
+            format!("{}/{}/{}",
+                    self.week,
+                    self.day.unwrap(),
+                    self.quarter.unwrap())
         } else if let Some(_) = self.day {
             format!("{}/{}", self.week, self.day.unwrap())
         } else {
