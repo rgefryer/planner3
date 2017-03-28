@@ -61,6 +61,10 @@ impl ChartTime {
         let day = c.name("day").map(|d| d.as_str().parse::<u32>().unwrap());
         let quarter = c.name("quarter").map(|q| q.as_str().parse::<u32>().unwrap());
 
+        if week == 0 {
+            bail!(format!("Week cannot be 0 in ChartTime: {}", desc));
+        }
+
         Ok(ChartTime {
                week: week,
                day: day,
