@@ -6,6 +6,7 @@ use regex::Regex;
 use errors::*;
 use charttime::ChartTime;
 use chartdate::ChartDate;
+use chartperiod::ChartPeriod;
 
 struct RootConfigData {
     // People are only defined on the root node
@@ -239,6 +240,8 @@ impl ConfigNode {
             config.peek_line() {
 
             config.get_line();
+            let cp = value.parse::<ChartPeriod>()
+                    .chain_err(|| format!("Error parsing \"time range\" for {} in [people] node", key))?;
             self.add_attribute(&key, &value).chain_err(|| "Failed to add attribute")?;
         }
         Ok(())
