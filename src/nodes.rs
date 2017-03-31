@@ -12,6 +12,63 @@ use chartdate::ChartDate;
 use chartperiod::ChartPeriod;
 use chartrow::ChartRow;
 
+/// Strategy for scheduling child nodes
+#[derive(Debug, Eq, PartialEq)]
+pub enum SchedulingStrategy {
+    /// The child nodes must be completed in order; no
+    /// work on child 2 until child 1 is complete.
+    Serial,
+
+    /// The children can be worked on at the same time.
+    /// However, resources are allocated for the children
+    /// in the order they are defined.
+    Parallel,
+}
+
+/// Strategy for allocating the budget
+#[derive(Debug, Eq, PartialEq)]
+pub enum ResourcingStrategy {
+    /// Allocated on a weekly rate, calculated quarterly.
+    /// 4 quarters management for every 20 quarters managees
+    /// (when the manager is present).  Calculated after
+    /// non-managed tasks have been removed.
+    Management,
+
+    /// Take the plan value, pro-rata it across the remaining
+    /// time, subtract any future commitments, then smear the
+    /// remainder.
+    ///
+    /// Warn if this means that the allocated resource does
+    /// not match the plan.
+    ///
+    /// This is typically used for overheads, which anticipate
+    /// a steady cost over the entire period.
+    SmearProRata,
+
+    /// Take the plan value, subtract commitments, and smear
+    /// the remainder across the remaining time.  The smearing ignores
+    /// existing commitments - ie the remaining costs are smeared
+    /// across the quarters that are currently empty.
+    ///
+    /// This is typically used for fixed costs, where failure
+    /// to use them early in the plan means more costs later.
+    SmearRemaining,
+
+    /// Allocate all of the plan asap.
+    ///
+    /// This is typically used for PRD work.  It can only
+    /// be scheduled after the smeared resources.
+    FrontLoad,
+
+    /// Like FrontLoad, but allocated from the end of the period.
+    BackLoad,
+
+    /// ProdSFR is a special-case of SmearRemaining, where 20% of the
+    /// remaining costs are smeared, and the other 80% are back-
+    /// filled at the end of the period.
+    ProdSFR,
+}
+
 struct DeveloperData {
 
     // Unallocated resource for this person
@@ -69,6 +126,10 @@ impl RootConfigData {
         self.developers.insert(name.to_string(), dev);
         Ok(())
     }
+
+    fn is_valid_developer(&self, name: &str) -> bool {
+        self.developers.contains_key(name)
+    }
 }
 
 struct NodeConfigData {
@@ -81,13 +142,29 @@ struct NodeConfigData {
     // Budget, in quarter days
     budget: Option<u32>,
 
+    scheduling: SchedulingStrategy,
+
+    resourcing: ResourcingStrategy,
+
+    // Flag that this task requires management oversight
+    managed: bool,
+
     // Notes are problems to display on the chart
     notes: Vec<String>,
+
+    dev: Option<String>,
+
 }
 
 impl NodeConfigData {
     fn new() -> NodeConfigData {
-        NodeConfigData { notes: Vec::new(), budget: None }
+        NodeConfigData { 
+            notes: Vec::new(), 
+            budget: None, 
+            scheduling: SchedulingStrategy::Parallel,
+            resourcing: ResourcingStrategy::FrontLoad,
+            managed: true,
+            dev: None }
     }
 
     fn set_budget(&mut self, budget: f32) -> Result<()> {
@@ -100,11 +177,75 @@ impl NodeConfigData {
         Ok(())
     }
 
+    fn set_non_managed(&mut self, non_managed: &str) -> Result<()> {
+
+        if non_managed == "true" {
+            self.managed = false;
+        } else if non_managed == "false" {
+            self.managed = true;
+        } else {
+            bail!(format!("Failed to parse non-managed value \"{}\"", non_managed))
+        }
+
+        Ok(())
+    }
+
+    fn set_schedule(&mut self, strategy: &str) -> Result<()> {
+
+        if strategy == "serial" {
+            self.scheduling = SchedulingStrategy::Serial;
+        } else if strategy == "parallel" {
+            self.scheduling = SchedulingStrategy::Parallel;
+        } else {
+            bail!(format!("Failed to parse scheduling strategy \"{}\"", strategy))
+        }
+
+        Ok(())
+    }
+
+    fn set_resource(&mut self, strategy: &str) -> Result<()> {
+
+        if strategy == "management" {
+            self.resourcing = ResourcingStrategy::Management;
+        } else if strategy == "smearprorata" {
+            self.resourcing = ResourcingStrategy::SmearProRata;
+        } else if strategy == "smearremaining" {
+            self.resourcing = ResourcingStrategy::SmearRemaining;
+        } else if strategy == "frontload" {
+            self.resourcing = ResourcingStrategy::FrontLoad;
+        } else if strategy == "backload" {
+            self.resourcing = ResourcingStrategy::BackLoad;
+        } else if strategy == "prodsfr" {
+            self.resourcing = ResourcingStrategy::ProdSFR;
+        } else {
+            bail!(format!("Failed to parse resourcing strategy \"{}\"", strategy))
+        }
+
+        Ok(())
+    }
+
+    fn set_dev(&mut self, root: &RootConfigData, dev: &String) -> Result<()> {
+        if !root.is_valid_developer(dev) {
+            bail!(format!("Developer \"{}\" not known", dev));
+        }
+
+        self.dev = Some(dev.clone());
+        Ok(())
+    }
+
     fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
 
         if key == "budget" {
             let budget = value.parse::<f32>().chain_err(|| "Failed to parse budget")?;
-            self.set_budget(budget).chain_err(|| "Failed to set budget");
+            self.set_budget(budget).chain_err(|| "Failed to set budget")?;
+        } else if key == "schedule" {
+            self.set_schedule(value).chain_err(|| "Failed to set schedule")?;
+        } else if key == "resource" {
+            self.set_resource(value).chain_err(|| "Failed to set resource")?;
+        } else if key == "non-managed" {
+            self.set_non_managed(value).chain_err(|| "Failed to set non-managed")?;
+        } else if key == "dev" {
+            self.set_dev(root, value).chain_err(|| "Failed to set dev")?;
         } else {
             bail!(format!("Unrecognised attribute \"{}\"", key));
         }
