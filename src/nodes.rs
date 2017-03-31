@@ -300,7 +300,7 @@ impl ConfigNode {
     fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
 
         if let Some(ref mut node_data) = self.node_data {
-            node_data.add_attribute(root, key, value).chain_err(|| "Failed to add attribute")?;
+            node_data.add_attribute(root, key, value)?;
         } else {
             bail!("Attempt to define attribute on root node");
         }
