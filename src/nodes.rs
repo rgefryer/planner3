@@ -1,12 +1,34 @@
 use std::cell::RefCell;
-use file;
+use std::collections::HashMap;
+use regex::Regex;
+
 use typed_arena;
 use arena_tree;
-use regex::Regex;
+
 use errors::*;
+use file;
 use charttime::ChartTime;
 use chartdate::ChartDate;
 use chartperiod::ChartPeriod;
+use chartrow::ChartRow;
+
+struct DeveloperData {
+
+    // Unallocated resource for this person
+    cells: ChartRow,
+
+    // Period for which this dev is available
+    period: ChartPeriod
+}
+
+impl DeveloperData {
+    fn new(cells: u32, period: &ChartPeriod) -> Result<DeveloperData> {
+        let mut data = DeveloperData { cells: ChartRow::new(cells), period: *period };
+        data.cells.set_range(period).chain_err(|| "Developer time range not valid")?;
+
+        Ok(data)
+    }
+}
 
 struct RootConfigData {
     // People are only defined on the root node
@@ -18,6 +40,9 @@ struct RootConfigData {
 
     // Date of the first day in the chart
     start_date: ChartDate,
+
+    // Mapping from name to data
+    developers: HashMap<String, DeveloperData>,
 }
 
 impl RootConfigData {
@@ -26,7 +51,19 @@ impl RootConfigData {
             weeks: 0,
             now: 0,
             start_date: ChartDate::new(),
+            developers: HashMap::new()
         }
+    }
+
+    fn add_developer(&mut self, name: &str, period: &ChartPeriod) -> Result<()> {
+
+        if self.developers.contains_key(name) {
+            bail!("Can't re-define a developer");
+        }
+
+        let dev = DeveloperData::new(self.weeks*20, period).chain_err(|| format!("Can't add developer {}", name))?;
+        self.developers.insert(name.to_string(), dev);
+        Ok(())
     }
 }
 
@@ -61,7 +98,7 @@ pub struct ConfigNode {
 
 // Avoid unnecessary recompilation of the regular expressions
 lazy_static! {
-    static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:chart)|(?:people))\]$").unwrap();
+    static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
 }
 
 impl ConfigNode {
@@ -186,10 +223,10 @@ impl ConfigNode {
             config.get_line() {
 
             let c = ROOT_NODE_RE.captures(&name).unwrap();
-            if &c["name"] == "chart" {
-                self.read_chart_config(&mut config).chain_err(|| "Failed to read [chart] node")?;
-            } else if &c["name"] == "people" {
-                self.read_people_config(&mut config).chain_err(|| "Failed to read [people] node")?;
+            if &c["name"] == "global" {
+                self.read_global_config(&mut config).chain_err(|| "Failed to read [global] node")?;
+            } else if &c["name"] == "devs" {
+                self.read_devs_config(&mut config).chain_err(|| "Failed to read [devs] node")?;
             } else {
                 bail!("Internal error: Unexpected node type");
             }
@@ -201,9 +238,8 @@ impl ConfigNode {
         Ok(())
     }
 
-    /// Store any configuration stored under [chart]
-    fn read_chart_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
-        println!("Reading chart config");
+    /// Store any configuration stored under [global]
+    fn read_global_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
 
@@ -233,16 +269,17 @@ impl ConfigNode {
         Ok(())
     }
 
-    /// Store any configuration stored under [people]
-    fn read_people_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
-        println!("Reading people config");
+    /// Store any configuration stored under [devs]
+    fn read_devs_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
         while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
             config.peek_line() {
 
             config.get_line();
             let cp = value.parse::<ChartPeriod>()
-                    .chain_err(|| format!("Error parsing \"time range\" for {} in [people] node", key))?;
-            self.add_attribute(&key, &value).chain_err(|| "Failed to add attribute")?;
+                    .chain_err(|| format!("Error parsing \"time range\" for \"{}\" in [devs] node", key))?;
+            if let Some(ref mut x) = self.root_data {
+                x.add_developer(&key, &cp).chain_err(|| format!("Error adding \"{}\" in [devs] node", key))?;
+            }
         }
         Ok(())
     }

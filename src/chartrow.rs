@@ -272,7 +272,7 @@ impl ChartRow {
 	pub fn smear_transfer_to(&mut self,
 								dest: &mut ChartRow, 
 								count: u32, 
-								period: ChartPeriod) -> Result<TransferResult> {
+								period: &ChartPeriod) -> Result<TransferResult> {
 
 		let mut rc = TransferResult::new(count);
 	  	let mut transferred_this_run = 1u32;  // Make sure we do at least one pass
@@ -280,14 +280,24 @@ impl ChartRow {
 	  	// We have an outer loop, in case the initial smear doesn't complete the job
 	  	while transferred_this_run != 0 && rc.to_transfer() != 0 {
 
+		  	let mut want_allocated_this_run = 0f64; // Num cells that should be allocated by now
+            let free_cells = period.length() as u32 - dest.count_range(period);
 		  	let amount_per_cell = rc.to_transfer() as f64 / period.length() as f64;
-		  	let mut want_allocated = 0f64; // Num cells that should be allocated by now
-		  	transferred_this_run = 0;
 
 		  	// Run through the cells
+		  	transferred_this_run = 0;
 			for cell in period.get_first() .. period.get_last() + 1 {
-		  		want_allocated += amount_per_cell;
-		  		if want_allocated > (transferred_this_run as f64) && self.is_set(cell) && !dest.is_set(cell) {
+
+                // Skip cells that are already allocated
+                if dest.is_set(cell) {
+                    continue;
+                }
+
+		  		want_allocated_this_run += amount_per_cell;
+
+                // Use magic-number in the following line to
+                // avoid floating-point inaccuracies.
+		  		if want_allocated_this_run > 0.0001 + (transferred_this_run as f64) && self.is_set(cell) {
 
 		  			transferred_this_run += 1;
 		  			self.unset(cell).chain_err(|| format!("Failed transferring cells from period {:?}", period))?;
@@ -301,7 +311,7 @@ impl ChartRow {
 		  	}
 	  	}
 
-		Ok(rc)	  	
+		Ok(rc)	  
 	}
 }
 
