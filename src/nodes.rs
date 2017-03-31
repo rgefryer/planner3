@@ -30,7 +30,7 @@ impl DeveloperData {
     }
 }
 
-struct RootConfigData {
+pub struct RootConfigData {
     // People are only defined on the root node
     //people: HashMap<String, PersonData>,
     weeks: u32,
@@ -40,6 +40,9 @@ struct RootConfigData {
 
     // Date of the first day in the chart
     start_date: ChartDate,
+
+    // Identity of the manager
+    manager: Option<String>,
 
     // Mapping from name to data
     developers: HashMap<String, DeveloperData>,
@@ -51,6 +54,7 @@ impl RootConfigData {
             weeks: 0,
             now: 0,
             start_date: ChartDate::new(),
+            manager: None,
             developers: HashMap::new()
         }
     }
@@ -74,13 +78,38 @@ struct NodeConfigData {
     // Period during which the task can be worked on
     //period: Option<ChartPeriod>
 
+    // Budget, in quarter days
+    budget: Option<u32>,
+
     // Notes are problems to display on the chart
     notes: Vec<String>,
 }
 
 impl NodeConfigData {
     fn new() -> NodeConfigData {
-        NodeConfigData { notes: Vec::new() }
+        NodeConfigData { notes: Vec::new(), budget: None }
+    }
+
+    fn set_budget(&mut self, budget: f32) -> Result<()> {
+
+        if budget < 0.0 {
+            bail!("Budget must be >= 0");
+        }
+
+        self.budget = Some((budget * 4.0).round() as u32);
+        Ok(())
+    }
+
+    fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
+
+        if key == "budget" {
+            let budget = value.parse::<f32>().chain_err(|| "Failed to parse budget")?;
+            self.set_budget(budget).chain_err(|| "Failed to set budget");
+        } else {
+            bail!(format!("Unrecognised attribute \"{}\"", key));
+        }
+
+        Ok(())
     }
 }
 
@@ -127,13 +156,14 @@ impl ConfigNode {
 
     }
 
-    fn add_attribute(&mut self, key: &String, value: &String) -> Result<()> {
+    fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
 
-        // Nonsense code to avoid compiler complaints
-        self.num_attrs += 1;
-        if key == value {
-            self.num_attrs += 2;
+        if let Some(ref mut node_data) = self.node_data {
+            node_data.add_attribute(root, key, value).chain_err(|| "Failed to add attribute")?;
+        } else {
+            bail!("Attempt to define attribute on root node");
         }
+
         Ok(())
     }
 
@@ -144,6 +174,7 @@ impl ConfigNode {
     pub fn new_from_config<'a, 'b>
         (arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
          config: &'b mut file::ConfigLines,
+         root: Option<&RootConfigData>,
          is_root: bool,
          level: u32)
 -> Result<&'a arena_tree::Node<'a, RefCell<ConfigNode>>>{
@@ -179,11 +210,10 @@ impl ConfigNode {
             config.get_line();
             node.data
                 .borrow_mut()
-                .add_attribute(&key, &value)
+                .add_attribute(root.unwrap(), &key, &value)
                 .chain_err(|| {
-                               format!("Failed to add attribute \"{}\" to node at line {}",
-                                       &key,
-                                       node_line_num)
+                               format!("Failed to add attribute \"{}\"",
+                                       &key)
                            })?;
         }
 
@@ -203,17 +233,35 @@ impl ConfigNode {
                                            line_num)
                                })?;
             } else {
-                let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
-                    ConfigNode::new_from_config(arena, config, false, level + 1).chain_err(|| {
-                                       format!("Failed to generate child node \
-                                               from config at line {}",
-                                               line_num)
-                                   })?;
-                node.append(child);
+                if is_root {
+                    if let Some(ref root_data) = node.data.borrow().root_data {
+                        ConfigNode::create_child(node, arena, config, Some(root_data), level+1, line_num)?;                    
+                    }
+                } else {
+                    ConfigNode::create_child(node, arena, config, root, level+1, line_num)?;                    
+                }
             }
         }
 
         Ok(node)
+    }
+
+    fn create_child<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<ConfigNode>>,
+arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
+         config: &'b mut file::ConfigLines,
+         root: Option<&RootConfigData>,
+         level: u32,
+         line_num: u32        
+     ) -> Result<()> {
+
+        let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
+            ConfigNode::new_from_config(arena, config, root, false, level).chain_err(|| {
+                               format!("Failed to generate child node \
+                                       from config at line {}",
+                                       line_num)
+                           })?;
+        node.append(child);
+        Ok(())
     }
 
     // Handle any "nodes" that define config at the root level
@@ -256,6 +304,10 @@ impl ConfigNode {
                 if let Some(ref mut x) = self.root_data {
                     x.now = ct.to_u32();
                 }
+            } else if key == "manager" {
+                if let Some(ref mut x) = self.root_data {
+                    x.manager = Some(value.to_string());
+                }
             } else if key == "start-date" {
                 let dt = value.parse::<ChartDate>()
                     .chain_err(|| "Error parsing \"start-date\" from [chart] node")?;
@@ -281,6 +333,16 @@ impl ConfigNode {
                 x.add_developer(&key, &cp).chain_err(|| format!("Error adding \"{}\" in [devs] node", key))?;
             }
         }
+
+        // Check that the manager has been defined
+        if let Some(ref root_data) = self.root_data {
+            if let Some(ref manager) = root_data.manager {
+                if !root_data.developers.contains_key(manager) {
+                    bail!(format!("Manager \"{}\" not defined as a dev", manager));
+                }
+            }
+        }
+
         Ok(())
     }
 }

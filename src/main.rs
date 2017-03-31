@@ -63,7 +63,7 @@ fn run() -> Result<()> {
     let mut config =
         file::ConfigLines::new_from_file("config.txt").chain_err(|| "Failed to read config")?;
     let arena = typed_arena::Arena::new();
-    let root = nodes::ConfigNode::new_from_config(&arena, &mut config, true, 0)
+    let root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
         .chain_err(|| "Failed to set up nodes")?;
 
     // Iterate through the node tree to demonstrate that it exists
