@@ -141,4 +141,8 @@ impl ChartPeriod {
     pub fn get_last(&self) -> u32 {
         self.last
     }
+
+    pub fn length(&self) -> u32 {
+        self.last + 1 - self.first
+    }
 }

@@ -27,6 +27,7 @@ mod errors;
 mod charttime;
 mod chartdate;
 mod chartperiod;
+mod chartrow;
 
 use errors::*;
 
