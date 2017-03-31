@@ -132,6 +132,23 @@ impl RootConfigData {
     }
 }
 
+struct PlanEntry {
+
+    // When this plan was added
+    when: u32,
+
+    // Number of quarter days in the plan
+    plan: u32,
+
+    suffix: Option<String>
+}
+
+impl PlanEntry {
+    fn new(when: u32, plan: u32, suffix: Option<String>) -> PlanEntry {
+        PlanEntry { when, plan, suffix }
+    }
+}
+
 struct NodeConfigData {
     // Cells are only used on leaf nodes
     //cells: ChartTimeRow
@@ -154,6 +171,8 @@ struct NodeConfigData {
 
     dev: Option<String>,
 
+    plan: Vec<PlanEntry>
+
 }
 
 impl NodeConfigData {
@@ -164,7 +183,9 @@ impl NodeConfigData {
             scheduling: SchedulingStrategy::Parallel,
             resourcing: ResourcingStrategy::FrontLoad,
             managed: true,
-            dev: None }
+            dev: None,
+            plan: Vec::new() 
+        }
     }
 
     fn set_budget(&mut self, budget: f32) -> Result<()> {
@@ -185,6 +206,37 @@ impl NodeConfigData {
             self.managed = true;
         } else {
             bail!(format!("Failed to parse non-managed value \"{}\"", non_managed))
+        }
+
+        Ok(())
+    }
+
+    fn add_plan(&mut self, plan: &str) -> Result<()> {
+
+        let c = PLAN_INDIVIDUAL_RE.captures(plan).ok_or(format!("Cannot parse plan part: {}", plan))?;
+        let mut date = 0u32;
+        if let Some(d) = c.name("date") {
+            date = ChartTime::from_str(d.as_str())
+                                         .map(|x| x.to_u32())
+                                                   .chain_err(|| format!("Failed to parse chart time \"{}\" from plan", d.as_str()))?;
+        }
+
+        let time = c["time"].parse::<f32>().chain_err(|| format!("Failed to parse plan duration \"{}\" from plan", &c["time"]))?;
+        let suffix = c.name("suffix").map(|x| x.as_str().to_string());
+        self.plan.push(PlanEntry::new(date, (time*4.0).round() as u32, suffix));   
+        Ok(())
+    }
+
+    fn set_plan(&mut self, plan: &str) -> Result<()> {
+
+        let c = PLAN_OVERALL_RE.captures(plan).ok_or(format!("Cannot parse plan: {}", plan))?;
+        let mut first = true;        
+        for p in c.iter() {
+            if first {
+                first = false;
+                continue;
+            }
+            self.add_plan(p.unwrap().as_str())?;
         }
 
         Ok(())
@@ -246,6 +298,8 @@ impl NodeConfigData {
             self.set_non_managed(value).chain_err(|| "Failed to set non-managed")?;
         } else if key == "dev" {
             self.set_dev(root, value).chain_err(|| "Failed to set dev")?;
+        } else if key == "plan" {
+            self.set_plan(value).chain_err(|| "Failed to set plan")?;
         } else {
             bail!(format!("Unrecognised attribute \"{}\"", key));
         }
@@ -269,6 +323,8 @@ pub struct ConfigNode {
 // Avoid unnecessary recompilation of the regular expressions
 lazy_static! {
     static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
+    static ref PLAN_OVERALL_RE: Regex = Regex::new(r"^([\d:pcmy\.]+)(?:, ([\d:pcmy\.]+))*$").unwrap();
+    static ref PLAN_INDIVIDUAL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)?(?P<time>\d+(?:\.\d{1,2})?)(?P<suffix>pc[ym])?$").unwrap();
 }
 
 impl ConfigNode {
