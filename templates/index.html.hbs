@@ -4,8 +4,12 @@
     <meta charset="utf-8" />
     <title>Planner Demo</title>
     <style>
+div.datagrid { overflow: scroll; }
 .datagrid table thead th.start { border-left:2px solid red; }
 .datagrid table tbody td.start { border-left:2px solid red; }
+
+.datagrid table thead th.label { border-left:2px solid green; }
+.datagrid table tbody td.label { border-left:2px solid green; }
 
 .datagrid table thead th.border { border-left:1px solid black; }
 .datagrid table tbody td.border { border-left:1px solid black; }
@@ -47,6 +51,18 @@ th.numbers { text-align: right; width:5em; }
                 <th class="numbers">Done</th>
                 <th class="numbers">Left</th>
                 {{#each cell_headers}}
+                    <th class="{{this.0}}">{{this.1}}</th>
+                {{/each}}
+            </tr>
+            <tr>
+                <th class="numbers"></th>
+                <th></th>
+                <th></th>
+                <th class="numbers border"></th>
+                <th class="numbers"></th>
+                <th class="numbers"></th>
+                <th class="numbers"></th>
+                {{#each cell_labels}}
                     <th class="{{this.0}}">{{this.1}}</th>
                 {{/each}}
             </tr>

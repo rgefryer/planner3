@@ -88,6 +88,22 @@ impl DeveloperData {
     }
 }
 
+struct LabelData {
+    when: u32,
+
+    text: String
+}
+
+impl LabelData {
+    fn new(defn: &str) -> Result<LabelData> {
+
+        let c = LABEL_RE.captures(defn).ok_or(format!("Couldn't parse label definition \"{}\"", defn))?;
+        let date = c["date"].parse::<ChartTime>().chain_err(|| format!("Failed to parse label date \"{}\"", &c["date"]))?;
+
+        Ok(LabelData{ when: date.to_u32(), text: c["text"].to_string()})
+    }
+}
+
 pub struct RootConfigData {
     // People are only defined on the root node
     //people: HashMap<String, PersonData>,
@@ -104,6 +120,8 @@ pub struct RootConfigData {
 
     // Mapping from name to data
     developers: HashMap<String, DeveloperData>,
+
+    labels: Vec<LabelData>,
 }
 
 impl RootConfigData {
@@ -113,8 +131,24 @@ impl RootConfigData {
             now: 0,
             start_date: ChartDate::new(),
             manager: None,
+            labels: Vec::new(),
             developers: HashMap::new()
         }
+    }
+
+    fn add_label(&mut self, defn: &str) -> Result<()> {
+        let label = LabelData::new(defn)?;
+        self.labels.push(label);
+        Ok(())
+    }
+
+    pub fn get_label(&self, when: &ChartTime) -> Option<String> {
+        for d in &self.labels {
+            if d.when >= when.to_u32() && d.when <= when.end_as_u32() {
+                return Some(d.text.clone());
+            }
+        }
+        return None;
     }
 
     pub fn get_weeks(&self) -> u32 {
@@ -123,7 +157,7 @@ impl RootConfigData {
     }
 
     pub fn get_now_week(&self) -> u32 {
-        self.now / 20
+        1 + self.now / 20
     }
 
     pub fn generate_dev_weekly_output(&self, context: &mut web::TemplateContext) {
@@ -134,8 +168,8 @@ impl RootConfigData {
             let mut row = web::TemplateRow::new(0, 0, &dev);
             let mut count = 0;
             for val in &cells.get_weekly_numbers() {
-                row.add_cell(*val as f32 / 4.0, count == self.get_now_week());
                 count += 1;
+                row.add_cell(*val as f32 / 4.0, count == self.get_now_week(), self.get_label(&ChartTime::from_str(&format!("{}", count)).unwrap()).map_or(false, |x| x.len() != 0));
             }
             row.set_left(cells.count() as f32 / 4.0);
             context.add_row(row);
@@ -467,6 +501,7 @@ lazy_static! {
     static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
     static ref PLAN_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)?(?P<time>\d+(?:\.\d{1,2})?)(?P<suffix>pc[ym])?$").unwrap();
     static ref DONE_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)(?P<time>\d+(?:\.\d{1,2})?)$").unwrap();
+    static ref LABEL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):\s*)(?P<text>.*)$").unwrap();
 }
 
 impl ConfigNode {
@@ -644,6 +679,10 @@ arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
             } else if key == "manager" {
                 if let Some(ref mut x) = self.root_data {
                     x.manager = Some(value.to_string());
+                }
+            } else if key == "label" {
+                if let Some(ref mut x) = self.root_data {
+                    x.add_label(&value);
                 }
             } else if key == "start-date" {
                 let dt = value.parse::<ChartDate>()

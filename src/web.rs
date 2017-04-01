@@ -8,6 +8,7 @@ use arena_tree;
 use errors::*;
 use nodes;
 use file;
+use charttime;
 
 #[derive(Serialize)]
 pub struct TemplateRow {
@@ -56,10 +57,12 @@ impl TemplateRow {
         }
     }
 
-    pub fn add_cell(&mut self, val: f32, start: bool) {
+    pub fn add_cell(&mut self, val: f32, start: bool, label: bool) {
         let mut styles = "grid".to_string();
         if start {
             styles.push_str(" start");
+        } else if label {
+            styles.push_str(" label");
         } else if self.cells.len() == 0 {
             styles.push_str(" border");
         }
@@ -110,22 +113,45 @@ impl TemplateRow {
 #[derive(Serialize)]
 pub struct TemplateContext {
     cell_headers: Vec<(String, String)>,
+    cell_labels: Vec<(String, String)>,
     rows: Vec<TemplateRow>,
 }
 
 impl TemplateContext {
-    pub fn new(cells: u32, now_cell: u32) -> TemplateContext {
+    pub fn new(root: &nodes::RootConfigData) -> TemplateContext {
         TemplateContext {
-            cell_headers: (1..cells + 1)
+            cell_headers: (1..root.get_weeks() + 1)
                 .map(|s| {
-                    (if s == now_cell+1 {
+                    let ct = charttime::ChartTime::from_str(&format!("{}", s)).unwrap();
+                    (if s == root.get_now_week() {
                          "grid start".to_string()
                      } else if s == 1 {
                         "grid border".to_string()
+                     } else if root.get_label(&ct).map_or(false, |x| x.len() != 0) {
+                        "grid label".to_string()
                     } else {
                         "grid".to_string()
                     },
                      format!("{}", s))
+                })
+                .collect(),
+            cell_labels: (1..root.get_weeks() + 1)
+                .map(|s| {
+                    let ct = charttime::ChartTime::from_str(&format!("{}", s)).unwrap();
+                    (if s == root.get_now_week() {
+                         "grid start".to_string()
+                     } else if s == 1 {
+                        "grid border".to_string()
+                     } else if root.get_label(&ct).map_or(false, |x| x.len() != 0) {
+                        "grid label".to_string()
+                    } else {
+                        "grid".to_string()
+                    },
+                     if s == root.get_now_week() { 
+                        "Now".to_string() 
+                    } else { 
+                        format!("{}", root.get_label(&ct).unwrap_or_default()) 
+                    })
                 })
                 .collect(),
             rows: Vec::new(),
@@ -149,7 +175,7 @@ impl TemplateContext {
 fn generate_chart_html(root: &arena_tree::Node<RefCell<nodes::ConfigNode>>) -> Result<Template> {
 
     if let Some(ref root_data) = root.data.borrow().root_data {
-        let mut context = TemplateContext::new(root_data.get_weeks(), root_data.get_now_week());
+        let mut context = TemplateContext::new(root_data);
 
         root_data.generate_dev_weekly_output(&mut context);
 
