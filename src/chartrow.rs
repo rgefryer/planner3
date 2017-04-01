@@ -114,7 +114,7 @@ impl ChartRow {
 		let weeks = 1 + ((self.num_cells - 1) / 20);
 		let mut output = Vec::new();
 		for week in 0..weeks {
-			output.push(self.count_range(&ChartPeriod::new(week*20, (week+1)*20).unwrap()));
+			output.push(self.count_range(&ChartPeriod::new(week*20, (week+1)*20-1).unwrap()));
 		}
 		output
 	}

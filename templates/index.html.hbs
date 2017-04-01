@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Planner Demo</title>
+    <style>
+.datagrid table thead th.start { border-left:2px solid red; }
+.datagrid table tbody td.start { border-left:2px solid red; }
+
+.datagrid table thead th.border { border-left:1px solid black; }
+.datagrid table tbody td.border { border-left:1px solid black; }
+
+.datagrid table { border-collapse: collapse; text-align: left; width: 100%; } 
+.datagrid {font: normal 12px/150% Arial, Helvetica, sans-serif; background: #fff; overflow: hidden; border: 1px solid #A65B1A; -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; }
+.datagrid table td, .datagrid table th { padding: 3px 2px; }
+.datagrid table thead th {background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #A65B1A), color-stop(1, #7F4614) );background:-moz-linear-gradient( center top, #A65B1A 5%, #7F4614 100% );filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#A65B1A', endColorstr='#7F4614');background-color:#A65B1A; color:#FFFFFF; font-size: 15px; font-weight: bold; border-left: 1px solid #BF691E; } 
+.datagrid table thead th:first-child { border: none; }
+.datagrid table tbody td { color: #7F4614; border-left: 1px solid #D9CFB8;font-size: 12px;font-weight: normal; }
+.datagrid table tbody .alt td { background: #F0E5CC; color: #7F4614; }
+.datagrid table tbody td:first-child { border-left: none; }
+.datagrid table tbody tr:last-child td { border-bottom: none; }
+.datagrid table tfoot td div { border-top: 1px solid #A65B1A;background: #F0E5CC;} 
+.datagrid table tfoot td { padding: 0; font-size: 11px } 
+.datagrid table tfoot td div{ padding: 2px; }    
+
+table.fixed { table-layout:fixed; }
+table.fixed td { overflow: hidden; }
+
+td.grid { text-align: right; font-family: monospace;}
+th.grid { text-align: center; width:2em; }
+
+td.numbers { text-align: right; font-family: monospace; }
+th.numbers { text-align: right; width:5em; }
+
+    </style>
+  </head>
+<body>
+<div class="datagrid">
+    <table class="fixed">
+        <thead>
+            <tr>
+                <th class="numbers">Who</th>
+                <th>What</th>
+                <th>Notes</th>
+                <th class="numbers border">Plan</th>
+                <th class="numbers">Gain</th>
+                <th class="numbers">Done</th>
+                <th class="numbers">Left</th>
+                {{#each cell_headers}}
+                    <th class="{{this.0}}">{{this.1}}</th>
+                {{/each}}
+            </tr>
+        </thead>
+        <tbody>
+        {{#each rows as |row|}}
+           {{#if row.even}}
+            <tr class="alt">
+            {{else}}
+            <tr>
+            {{/if}}
+                <td class="numbers">{{row.who}}</td>
+                <td>{{{row.what}}}</td>
+                <td>{{{row.notes_html}}}</td>
+                <td class="numbers border">{{{row.plan}}}</td>
+                <td class="numbers">{{{row.gain}}}</td>
+                <td class="numbers">{{{row.done}}}</td>
+                <td class="numbers">{{{row.left}}}</td>
+                {{#each row.cells as |c|}}
+                    <td class="{{c.0}}">{{{c.1}}}</td>
+                {{/each}}
+            </tr>
+        {{/each}}
+        </tbody>
+    </table>
+</div>    
+
+</body>
+</html>
+
+

@@ -11,6 +11,7 @@ use charttime::ChartTime;
 use chartdate::ChartDate;
 use chartperiod::ChartPeriod;
 use chartrow::ChartRow;
+use web;
 
 /// Strategy for scheduling child nodes
 #[derive(Debug, Eq, PartialEq)]
@@ -115,6 +116,32 @@ impl RootConfigData {
             developers: HashMap::new()
         }
     }
+
+    pub fn get_weeks(&self) -> u32 {
+        self.weeks
+
+    }
+
+    pub fn get_now_week(&self) -> u32 {
+        self.now / 20
+    }
+
+    pub fn generate_dev_weekly_output(&self, context: &mut web::TemplateContext) {
+
+        // Set up row data for people
+        for (dev, &DeveloperData{ref cells, period: _}) in &self.developers {
+
+            let mut row = web::TemplateRow::new(0, 0, &dev);
+            let mut count = 0;
+            for val in &cells.get_weekly_numbers() {
+                row.add_cell(*val as f32 / 4.0, count == self.get_now_week());
+                count += 1;
+            }
+            row.set_left(cells.count() as f32 / 4.0);
+            context.add_row(row);
+        }
+    }
+
 
     fn add_developer(&mut self, name: &str, period: &ChartPeriod) -> Result<()> {
 
@@ -431,10 +458,8 @@ pub struct ConfigNode {
     indent: u32,
     level: u32, // Root node is level 0
 
-    root_data: Option<RootConfigData>,
+    pub root_data: Option<RootConfigData>,
     node_data: Option<NodeConfigData>,
-
-    num_attrs: u32,
 }
 
 // Avoid unnecessary recompilation of the regular expressions
@@ -465,7 +490,6 @@ impl ConfigNode {
             //people: HashMap::new(),
             //cells: ChartTimeRow::new(),
             //period: None,
-            num_attrs: 0,
         }
 
     }
