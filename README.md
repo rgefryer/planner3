@@ -15,3 +15,6 @@ A project planning tool.
 *  Display "from-now", omitting completed tasks
 *  Display individual PRDs
 *  Display budgets only
+
+## Minor tidy-ups
+*  Text alignment of week labels above labels should be centered, not left-justified.

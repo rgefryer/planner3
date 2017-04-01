@@ -124,6 +124,13 @@ pub struct RootConfigData {
     labels: Vec<LabelData>,
 }
 
+pub enum BorderType {
+    None,
+    Start,
+    Now,
+    Label
+}
+
 impl RootConfigData {
     fn new() -> RootConfigData {
         RootConfigData {
@@ -158,6 +165,27 @@ impl RootConfigData {
 
     pub fn get_now_week(&self) -> u32 {
         1 + self.now / 20
+    }
+
+    pub fn weekly_left_border(&self, week: u32) -> BorderType {
+        if week == self.get_now_week() {
+             BorderType::Now
+        } else if week == 1 {
+            BorderType::Start
+        } else if self.weekly_label(week).map_or(false, |x| x.len() != 0) {
+            BorderType::Label
+        } else {
+            BorderType::None
+        }
+    }
+
+    pub fn weekly_label(&self, week: u32) -> Option<String> {
+        if week == self.get_now_week() {
+            Some("Now".to_string())
+        } else {
+            let ct = ChartTime::from_str(&format!("{}", week)).unwrap();
+            self.get_label(&ct) 
+        }
     }
 
     pub fn generate_dev_weekly_output(&self, context: &mut web::TemplateContext) {

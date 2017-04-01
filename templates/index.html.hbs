@@ -5,10 +5,10 @@
     <title>Planner Demo</title>
     <style>
 div.datagrid { overflow: scroll; }
-.datagrid table thead th.start { border-left:2px solid red; }
+.datagrid table thead th.start { border-left:2px solid red; text-align: left; }
 .datagrid table tbody td.start { border-left:2px solid red; }
 
-.datagrid table thead th.label { border-left:2px solid green; }
+.datagrid table thead th.label { border-left:2px solid green; text-align: left; }
 .datagrid table tbody td.label { border-left:2px solid green; }
 
 .datagrid table thead th.border { border-left:1px solid black; }
@@ -63,7 +63,7 @@ th.numbers { text-align: right; width:5em; }
                 <th class="numbers"></th>
                 <th class="numbers"></th>
                 {{#each cell_labels}}
-                    <th class="{{this.0}}">{{this.1}}</th>
+                    <th colspan={{this.0}} class="{{this.1}}">{{this.2}}</th>
                 {{/each}}
             </tr>
         </thead>

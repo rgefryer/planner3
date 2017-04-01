@@ -112,50 +112,66 @@ impl TemplateRow {
 
 #[derive(Serialize)]
 pub struct TemplateContext {
+    // Tuples of (style, content)
     cell_headers: Vec<(String, String)>,
-    cell_labels: Vec<(String, String)>,
+
+    // Tuples of (colspan, style, content)
+    cell_labels: Vec<(u32, String, String)>,
+
     rows: Vec<TemplateRow>,
 }
 
 impl TemplateContext {
-    pub fn new(root: &nodes::RootConfigData) -> TemplateContext {
-        TemplateContext {
-            cell_headers: (1..root.get_weeks() + 1)
-                .map(|s| {
-                    let ct = charttime::ChartTime::from_str(&format!("{}", s)).unwrap();
-                    (if s == root.get_now_week() {
-                         "grid start".to_string()
-                     } else if s == 1 {
-                        "grid border".to_string()
-                     } else if root.get_label(&ct).map_or(false, |x| x.len() != 0) {
-                        "grid label".to_string()
-                    } else {
-                        "grid".to_string()
-                    },
-                     format!("{}", s))
-                })
-                .collect(),
-            cell_labels: (1..root.get_weeks() + 1)
-                .map(|s| {
-                    let ct = charttime::ChartTime::from_str(&format!("{}", s)).unwrap();
-                    (if s == root.get_now_week() {
-                         "grid start".to_string()
-                     } else if s == 1 {
-                        "grid border".to_string()
-                     } else if root.get_label(&ct).map_or(false, |x| x.len() != 0) {
-                        "grid label".to_string()
-                    } else {
-                        "grid".to_string()
-                    },
-                     if s == root.get_now_week() { 
-                        "Now".to_string() 
-                    } else { 
-                        format!("{}", root.get_label(&ct).unwrap_or_default()) 
-                    })
-                })
-                .collect(),
-            rows: Vec::new(),
+
+    fn cell_border_style(root: &nodes::RootConfigData, week: u32) -> String {
+        match root.weekly_left_border(week) {
+            nodes::BorderType::None => "grid".to_string(),
+            nodes::BorderType::Start => "grid border".to_string(),
+            nodes::BorderType::Now => "grid start".to_string(),
+            nodes::BorderType::Label => "grid label".to_string(),
         }
+    }
+
+    pub fn new(root: &nodes::RootConfigData) -> TemplateContext {
+
+        let mut t = TemplateContext { cell_headers: Vec::new(), cell_labels: Vec::new(), rows: Vec::new() };
+
+        for s in 1..root.get_weeks() + 1 {
+            let style = TemplateContext::cell_border_style(root, s);
+            t.cell_headers.push((style, s.to_string()));
+        }
+
+        let mut colspan = 0;
+        let mut last_style: Option<String> = None;
+        let mut last_note: Option<String> = None;
+        for s in 1..root.get_weeks() + 1 {
+            let style = TemplateContext::cell_border_style(root, s);
+            colspan += 1;
+            if style != "grid" {
+                // Complete the current span
+                if let Some(style) = last_style {
+                    if let Some(note) = last_note {
+                        t.cell_labels.push((colspan, style, note));
+                    } else {
+                        t.cell_labels.push((colspan, style, "".to_string()));
+                    }
+                }
+
+                // Start on the next span
+                last_style = Some(style);
+                last_note = root.weekly_label(s);
+                colspan = 0;
+            }
+        }
+
+        // Complete the current span
+        if let Some(note) = last_note {
+            t.cell_labels.push((colspan+1, last_style.unwrap(), note));
+        } else {
+            t.cell_labels.push((colspan+1, last_style.unwrap(), "".to_string()));
+        }
+        
+        t
     }
 
     pub fn add_row(&mut self, mut row: TemplateRow) {
