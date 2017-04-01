@@ -196,6 +196,8 @@ struct NodeConfigData {
 
     plan: Vec<PlanEntry>,
 
+    default_plan: Vec<PlanEntry>,
+
     done: Vec<DoneEntry>
 
 }
@@ -210,6 +212,7 @@ impl NodeConfigData {
             managed: true,
             dev: None,
             plan: Vec::new(),
+            default_plan: Vec::new(),
             done: Vec::new() 
         }
     }
@@ -237,7 +240,7 @@ impl NodeConfigData {
         Ok(())
     }
 
-    fn add_plan(&mut self, plan: &str) -> Result<()> {
+    fn new_plan_entry(&mut self, plan: &str) -> Result<PlanEntry> {
 
         let c = PLAN_RE.captures(plan).ok_or(format!("Cannot parse plan part: {}", plan))?;
         let mut date = 0u32;
@@ -249,8 +252,8 @@ impl NodeConfigData {
 
         let time = c["time"].parse::<f32>().chain_err(|| format!("Failed to parse plan duration \"{}\" from plan", &c["time"]))?;
         let suffix = c.name("suffix").map(|x| x.as_str().to_string());
-        self.plan.push(PlanEntry::new(date, (time*4.0).round() as u32, suffix));   
-        Ok(())
+
+        Ok(PlanEntry::new(date, (time*4.0).round() as u32, suffix))   
     }
 
     fn set_plan(&mut self, plan: &str) -> Result<()> {
@@ -258,6 +261,9 @@ impl NodeConfigData {
         let mut count = 0;
         for part in plan.split(", ") {
             self.add_plan(part)?;
+
+            let p = self.new_plan_entry(part)?;
+            self.plan.push(p);
             count += 1;
         }
 
