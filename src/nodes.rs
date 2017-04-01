@@ -130,6 +130,10 @@ impl RootConfigData {
     fn is_valid_developer(&self, name: &str) -> bool {
         self.developers.contains_key(name)
     }
+
+    fn is_valid_cell(&self, cell: u32) -> bool {
+        cell < 20 * self.weeks
+    }
 }
 
 struct PlanEntry {
@@ -148,6 +152,25 @@ impl PlanEntry {
         PlanEntry { when, plan, suffix }
     }
 }
+
+struct DoneEntry {
+    // Time the work started
+    start: ChartTime,
+
+    // How much work, in quarter days.  If the time <= the
+    // span of start (eg start covers a week, and time <= 5 days)
+    // then the time must be scheduled from that period.  Otherwise,
+    // the time must be scheduled forward from the start time with
+    // no interruptions.
+    time: u32
+}
+
+impl DoneEntry {    
+    fn new(start: ChartTime, time: u32) -> DoneEntry {
+        DoneEntry { start, time }
+    }
+}
+
 
 struct NodeConfigData {
     // Cells are only used on leaf nodes
@@ -171,7 +194,9 @@ struct NodeConfigData {
 
     dev: Option<String>,
 
-    plan: Vec<PlanEntry>
+    plan: Vec<PlanEntry>,
+
+    done: Vec<DoneEntry>
 
 }
 
@@ -184,7 +209,8 @@ impl NodeConfigData {
             resourcing: ResourcingStrategy::FrontLoad,
             managed: true,
             dev: None,
-            plan: Vec::new() 
+            plan: Vec::new(),
+            done: Vec::new() 
         }
     }
 
@@ -229,14 +255,53 @@ impl NodeConfigData {
 
     fn set_plan(&mut self, plan: &str) -> Result<()> {
 
-        let c = PLAN_OVERALL_RE.captures(plan).ok_or(format!("Cannot parse plan: {}", plan))?;
+        let c = PLAN_OVERALL_RE.captures(plan).ok_or(format!("Cannot parse plan: \"{}\"", plan))?;
         let mut first = true;        
         for p in c.iter() {
             if first {
                 first = false;
                 continue;
             }
-            self.add_plan(p.unwrap().as_str())?;
+            if let Some(m) = p {
+                self.add_plan(m.as_str())?;
+            } else {
+                bail!(format!("Cannot parse plan: \"{}\"", plan));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn add_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
+
+        let c = DONE_INDIVIDUAL_RE.captures(done).ok_or(format!("Cannot parse done part: \"{}\"", done))?;
+        let date = c["date"].parse::<ChartTime>().chain_err(|| format!("Failed to parse done start time \"{}\" from done", &c["date"]))?;
+        let time = c["time"].parse::<f32>().chain_err(|| format!("Failed to parse done duration \"{}\" from done", &c["time"]))?;
+        let time_q = (time*4.0).round() as u32;
+
+
+        if !root.is_valid_cell(date.to_u32() + time_q - 1) {
+            bail!(format!("Done time period \"{}\" falls outside the chart", done));
+        }
+
+        self.done.push(DoneEntry::new(date, time_q));   
+        Ok(())
+    }
+
+    fn set_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
+
+        let c = DONE_OVERALL_RE.captures(done).ok_or(format!("Cannot parse done: {}", done))?;
+        let mut first = true;        
+        for p in c.iter() {
+            if first {
+                first = false;
+                continue;
+            }
+            if let Some(m) = p {
+                self.add_done(root, m.as_str())?;
+            } else {
+                bail!(format!("Cannot parse done: \"{}\"", done));
+            }
         }
 
         Ok(())
@@ -300,6 +365,8 @@ impl NodeConfigData {
             self.set_dev(root, value).chain_err(|| "Failed to set dev")?;
         } else if key == "plan" {
             self.set_plan(value).chain_err(|| "Failed to set plan")?;
+        } else if key == "done" {
+            self.set_done(root, value).chain_err(|| "Failed to set done")?;
         } else {
             bail!(format!("Unrecognised attribute \"{}\"", key));
         }
@@ -323,8 +390,10 @@ pub struct ConfigNode {
 // Avoid unnecessary recompilation of the regular expressions
 lazy_static! {
     static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
-    static ref PLAN_OVERALL_RE: Regex = Regex::new(r"^([\d:pcmy\.]+)(?:, ([\d:pcmy\.]+))*$").unwrap();
+    static ref PLAN_OVERALL_RE: Regex = Regex::new(r"^([\d:pcmy\./]+)(?:, ([\d:pcmy\./]+))*$").unwrap();
     static ref PLAN_INDIVIDUAL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)?(?P<time>\d+(?:\.\d{1,2})?)(?P<suffix>pc[ym])?$").unwrap();
+    static ref DONE_OVERALL_RE: Regex = Regex::new(r"^([\d:\./]+)(?:, ([\d:\./]+))*$").unwrap();
+    static ref DONE_INDIVIDUAL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)(?P<time>\d+(?:\.\d{1,2})?)$").unwrap();
 }
 
 impl ConfigNode {
