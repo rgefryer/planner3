@@ -128,7 +128,7 @@ impl RootConfigData {
     }
 
     fn is_valid_developer(&self, name: &str) -> bool {
-        self.developers.contains_key(name)
+        name == "outsource" || self.developers.contains_key(name)
     }
 
     fn is_valid_cell(&self, cell: u32) -> bool {
@@ -174,10 +174,7 @@ impl DoneEntry {
 
 struct NodeConfigData {
     // Cells are only used on leaf nodes
-    //cells: ChartTimeRow
-
-    // Period during which the task can be worked on
-    //period: Option<ChartPeriod>
+    cells: ChartRow,
 
     // Budget, in quarter days
     budget: Option<u32>,
@@ -198,12 +195,15 @@ struct NodeConfigData {
 
     default_plan: Vec<PlanEntry>,
 
-    done: Vec<DoneEntry>
+    done: Vec<DoneEntry>,
 
+    earliest_start: u32,
+
+    latest_end: u32
 }
 
 impl NodeConfigData {
-    fn new() -> NodeConfigData {
+    fn new(num_cells: u32) -> NodeConfigData {
         NodeConfigData { 
             notes: Vec::new(), 
             budget: None, 
@@ -213,7 +213,10 @@ impl NodeConfigData {
             dev: None,
             plan: Vec::new(),
             default_plan: Vec::new(),
-            done: Vec::new() 
+            done: Vec::new(),
+            earliest_start: 0,
+            latest_end: num_cells,
+            cells: ChartRow::new(num_cells)
         }
     }
 
@@ -227,6 +230,13 @@ impl NodeConfigData {
         Ok(())
     }
 
+    fn add_note(&mut self, note: &str) -> Result<()> {
+
+        self.notes.push(note.to_string());
+
+        Ok(())
+    }
+
     fn set_non_managed(&mut self, non_managed: &str) -> Result<()> {
 
         if non_managed == "true" {
@@ -235,6 +245,26 @@ impl NodeConfigData {
             self.managed = true;
         } else {
             bail!(format!("Failed to parse non-managed value \"{}\"", non_managed))
+        }
+
+        Ok(())
+    }
+
+    fn set_earliest_start(&mut self, root: &RootConfigData, when: &str) -> Result<()> {
+
+        let ct = when.parse::<ChartTime>().chain_err(|| format!("Failed to parse earliest-start \"{}\"", when))?;
+        if ct.to_u32() > self.earliest_start {
+            self.earliest_start = ct.to_u32();
+        }
+
+        Ok(())
+    }
+
+    fn set_latest_end(&mut self, root: &RootConfigData, when: &str) -> Result<()> {
+
+        let ct = when.parse::<ChartTime>().chain_err(|| format!("Failed to parse latest-end \"{}\"", when))?;
+        if ct.end_as_u32() < self.latest_end {
+            self.latest_end = ct.end_as_u32();
         }
 
         Ok(())
@@ -260,8 +290,6 @@ impl NodeConfigData {
 
         let mut count = 0;
         for part in plan.split(", ") {
-            self.add_plan(part)?;
-
             let p = self.new_plan_entry(part)?;
             self.plan.push(p);
             count += 1;
@@ -269,6 +297,22 @@ impl NodeConfigData {
 
         if count == 0 {
             bail!(format!("Failed to parse plan \"{}\"", plan));
+        }
+
+        Ok(())
+    }
+
+    fn set_default_plan(&mut self, plan: &str) -> Result<()> {
+
+        let mut count = 0;
+        for part in plan.split(", ") {
+            let p = self.new_plan_entry(part)?;
+            self.default_plan.push(p);
+            count += 1;
+        }
+
+        if count == 0 {
+            bail!(format!("Failed to parse default-plan \"{}\"", plan));
         }
 
         Ok(())
@@ -361,10 +405,18 @@ impl NodeConfigData {
             self.set_non_managed(value).chain_err(|| "Failed to set non-managed")?;
         } else if key == "dev" {
             self.set_dev(root, value).chain_err(|| "Failed to set dev")?;
+        } else if key == "note" {
+            self.add_note(value).chain_err(|| "Failed to add note")?;
         } else if key == "plan" {
             self.set_plan(value).chain_err(|| "Failed to set plan")?;
+        } else if key == "default-plan" {
+            self.set_default_plan(value).chain_err(|| "Failed to set default-plan")?;
         } else if key == "done" {
             self.set_done(root, value).chain_err(|| "Failed to set done")?;
+        } else if key == "earliest-start" {
+            self.set_earliest_start(root, value).chain_err(|| "Failed to set earliest-start")?;
+        } else if key == "latest-end" {
+            self.set_latest_end(root, value).chain_err(|| "Failed to set latest-end")?;
         } else {
             bail!(format!("Unrecognised attribute \"{}\"", key));
         }
@@ -393,7 +445,7 @@ lazy_static! {
 }
 
 impl ConfigNode {
-    fn new(name: &str, level: u32, indent: u32, line_num: u32, is_root: bool) -> ConfigNode {
+    fn new(name: &str, level: u32, indent: u32, line_num: u32, is_root: bool, num_cells: u32) -> ConfigNode {
         ConfigNode {
             name: name.to_string(),
             line_num: line_num,
@@ -407,7 +459,7 @@ impl ConfigNode {
             node_data: if is_root {
                 None
             } else {
-                Some(NodeConfigData::new())
+                Some(NodeConfigData::new(num_cells))
             },
             //attributes: HashMap::new(),
             //people: HashMap::new(),
@@ -449,7 +501,8 @@ impl ConfigNode {
                                                                            0,
                                                                            0,
                                                                            0,
-                                                                           is_root))))
+                                                                           is_root,
+                                                                           0))))
         } else {
             if let Some(file::Line::Node(file::LineNode { line_num, indent, name })) =
                 config.get_line() {
@@ -459,7 +512,8 @@ impl ConfigNode {
                                                                                level,
                                                                                indent,
                                                                                line_num,
-                                                                               is_root))))
+                                                                               is_root,
+                                                                               20*root.unwrap().weeks))))
             } else {
                 // Should not have been called without a Node to read.
                 bail!("Internal error: new_from_config called without a node to read");
