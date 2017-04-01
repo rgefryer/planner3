@@ -239,7 +239,7 @@ impl NodeConfigData {
 
     fn add_plan(&mut self, plan: &str) -> Result<()> {
 
-        let c = PLAN_INDIVIDUAL_RE.captures(plan).ok_or(format!("Cannot parse plan part: {}", plan))?;
+        let c = PLAN_RE.captures(plan).ok_or(format!("Cannot parse plan part: {}", plan))?;
         let mut date = 0u32;
         if let Some(d) = c.name("date") {
             date = ChartTime::from_str(d.as_str())
@@ -255,18 +255,14 @@ impl NodeConfigData {
 
     fn set_plan(&mut self, plan: &str) -> Result<()> {
 
-        let c = PLAN_OVERALL_RE.captures(plan).ok_or(format!("Cannot parse plan: \"{}\"", plan))?;
-        let mut first = true;        
-        for p in c.iter() {
-            if first {
-                first = false;
-                continue;
-            }
-            if let Some(m) = p {
-                self.add_plan(m.as_str())?;
-            } else {
-                bail!(format!("Cannot parse plan: \"{}\"", plan));
-            }
+        let mut count = 0;
+        for part in plan.split(", ") {
+            self.add_plan(part)?;
+            count += 1;
+        }
+
+        if count == 0 {
+            bail!(format!("Failed to parse plan \"{}\"", plan));
         }
 
         Ok(())
@@ -274,7 +270,7 @@ impl NodeConfigData {
 
     fn add_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
 
-        let c = DONE_INDIVIDUAL_RE.captures(done).ok_or(format!("Cannot parse done part: \"{}\"", done))?;
+        let c = DONE_RE.captures(done).ok_or(format!("Cannot parse done part: \"{}\"", done))?;
         let date = c["date"].parse::<ChartTime>().chain_err(|| format!("Failed to parse done start time \"{}\" from done", &c["date"]))?;
         let time = c["time"].parse::<f32>().chain_err(|| format!("Failed to parse done duration \"{}\" from done", &c["time"]))?;
         let time_q = (time*4.0).round() as u32;
@@ -290,18 +286,14 @@ impl NodeConfigData {
 
     fn set_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
 
-        let c = DONE_OVERALL_RE.captures(done).ok_or(format!("Cannot parse done: {}", done))?;
-        let mut first = true;        
-        for p in c.iter() {
-            if first {
-                first = false;
-                continue;
-            }
-            if let Some(m) = p {
-                self.add_done(root, m.as_str())?;
-            } else {
-                bail!(format!("Cannot parse done: \"{}\"", done));
-            }
+        let mut count = 0;
+        for part in done.split(", ") {
+            self.add_done(root, part)?;
+            count += 1;
+        }
+
+        if count == 0 {
+            bail!(format!("Failed to parse done \"{}\"", done));
         }
 
         Ok(())
@@ -390,10 +382,8 @@ pub struct ConfigNode {
 // Avoid unnecessary recompilation of the regular expressions
 lazy_static! {
     static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
-    static ref PLAN_OVERALL_RE: Regex = Regex::new(r"^([\d:pcmy\./]+)(?:, ([\d:pcmy\./]+))*$").unwrap();
-    static ref PLAN_INDIVIDUAL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)?(?P<time>\d+(?:\.\d{1,2})?)(?P<suffix>pc[ym])?$").unwrap();
-    static ref DONE_OVERALL_RE: Regex = Regex::new(r"^([\d:\./]+)(?:, ([\d:\./]+))*$").unwrap();
-    static ref DONE_INDIVIDUAL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)(?P<time>\d+(?:\.\d{1,2})?)$").unwrap();
+    static ref PLAN_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)?(?P<time>\d+(?:\.\d{1,2})?)(?P<suffix>pc[ym])?$").unwrap();
+    static ref DONE_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):)(?P<time>\d+(?:\.\d{1,2})?)$").unwrap();
 }
 
 impl ConfigNode {
@@ -478,8 +468,9 @@ impl ConfigNode {
                 .borrow_mut()
                 .add_attribute(root.unwrap(), &key, &value)
                 .chain_err(|| {
-                               format!("Failed to add attribute \"{}\"",
-                                       &key)
+                               format!("Failed to add attribute \"{}\" into node at line {}",
+                                       &key,
+                                       node_line_num)
                            })?;
         }
 
@@ -521,11 +512,7 @@ arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
      ) -> Result<()> {
 
         let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =
-            ConfigNode::new_from_config(arena, config, root, false, level).chain_err(|| {
-                               format!("Failed to generate child node \
-                                       from config at line {}",
-                                       line_num)
-                           })?;
+            ConfigNode::new_from_config(arena, config, root, false, level)?;
         node.append(child);
         Ok(())
     }
