@@ -18,19 +18,19 @@ use web;
 use self::root::RootConfigData;
 use self::data::NodeConfigData;
 
-pub struct ConfigNode {
-    pub name: String,
-    line_num: u32,
-    indent: u32,
-    level: u32, // Root node is level 0
-
-    pub root_data: Option<RootConfigData>,
-    node_data: Option<NodeConfigData>,
-}
-
 // Avoid unnecessary recompilation of the regular expressions
 lazy_static! {
-    static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
+    pub static ref ROOT_NODE_RE: Regex = Regex::new(r"^\[(?P<name>(?:global)|(?:devs))\]$").unwrap();
+}
+
+pub struct ConfigNode {
+    pub name: String,
+    pub line_num: u32,
+    indent: u32,
+    pub level: u32, // Root node is level 0
+
+    pub root_data: Option<RootConfigData>,
+    pub node_data: Option<NodeConfigData>,
 }
 
 impl ConfigNode {
@@ -56,17 +56,6 @@ impl ConfigNode {
             //period: None,
         }
 
-    }
-
-    fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
-
-        if let Some(ref mut node_data) = self.node_data {
-            node_data.add_attribute(root, key, value)?;
-        } else {
-            bail!("Attempt to define attribute on root node");
-        }
-
-        Ok(())
     }
 
     /// Generate a new node, and all children
@@ -165,91 +154,28 @@ arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
         Ok(())
     }
 
+    fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
+
+        if let Some(ref mut node_data) = self.node_data {
+            node_data.add_attribute(root, key, value)?;
+        } else {
+            bail!("Attempt to define attribute on root node");
+        }
+
+        Ok(())
+    }
+
     // Handle any "nodes" that define config at the root level
     fn read_root_config(&mut self, mut config: &mut file::ConfigLines) -> Result<()> {
 
-        if let Some(file::Line::Node(file::LineNode { line_num: _, indent: _, name })) =
-            config.get_line() {
-
-            let c = ROOT_NODE_RE.captures(&name).unwrap();
-            if &c["name"] == "global" {
-                self.read_global_config(&mut config).chain_err(|| "Failed to read [global] node")?;
-            } else if &c["name"] == "devs" {
-                self.read_devs_config(&mut config).chain_err(|| "Failed to read [devs] node")?;
-            } else {
-                bail!("Internal error: Unexpected node type");
-            }
+        if let Some(ref mut root_data) = self.root_data {
+            root_data.read_config(config)?;
         } else {
-            // Should not have been called without a Node to read.
-            bail!("Internal error: read_root_config called without a node to read");
+            bail!("Attempt to read root config on non-root node");
         }
 
         Ok(())
-    }
+   }
 
-    /// Store any configuration stored under [global]
-    fn read_global_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
-        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
-            config.peek_line() {
 
-            config.get_line();
-
-            if key == "weeks" {
-                if let Some(ref mut x) = self.root_data {
-                    let weeks = value.parse::<u32>()
-                        .chain_err(|| "Error parsing \"weeks\" from [chart] node")?;
-
-                    x.set_weeks(weeks);
-                }
-            } else if key == "now" {
-                let ct = value.parse::<ChartTime>()
-                    .chain_err(|| "Error parsing \"now\" from [chart] node")?;
-                if let Some(ref mut x) = self.root_data {
-                    x.set_now(ct.to_u32());
-                }
-            } else if key == "manager" {
-                if let Some(ref mut x) = self.root_data {
-                    x.set_manager(&value);
-                }
-            } else if key == "label" {
-                if let Some(ref mut x) = self.root_data {
-                    x.add_label(&value);
-                }
-            } else if key == "start-date" {
-                let dt = value.parse::<ChartDate>()
-                    .chain_err(|| "Error parsing \"start-date\" from [chart] node")?;
-                if let Some(ref mut x) = self.root_data {
-                    x.set_start_date(&dt);
-                }
-            } else {
-                bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
-            }
-        }
-        Ok(())
-    }
-
-    /// Store any configuration stored under [devs]
-    fn read_devs_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
-        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
-            config.peek_line() {
-
-            config.get_line();
-            let cp = value.parse::<ChartPeriod>()
-                    .chain_err(|| format!("Error parsing \"time range\" for \"{}\" in [devs] node", key))?;
-            if let Some(ref mut x) = self.root_data {
-                x.add_developer(&key, &cp).chain_err(|| format!("Error adding \"{}\" in [devs] node", key))?;
-            }
-        }
-
-        // Check that the manager has been defined
-        if let Some(ref root_data) = self.root_data {
-            if let Some(ref manager) = root_data.get_manager() {
-                if !root_data.is_valid_developer(manager) {
-                    bail!(format!("Manager \"{}\" not defined as a dev", manager));
-                }
-            }
-        }
-
-        Ok(())
-    }
 }

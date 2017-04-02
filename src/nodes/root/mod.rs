@@ -11,6 +11,7 @@ use charttime::ChartTime;
 use chartdate::ChartDate;
 use chartperiod::ChartPeriod;
 use chartrow::ChartRow;
+use nodes::ROOT_NODE_RE;
 use web;
 
 // Avoid unnecessary recompilation of the regular expressions
@@ -183,7 +184,7 @@ impl RootConfigData {
             let mut count = 0;
             for val in &cells.get_weekly_numbers() {
                 count += 1;
-                row.add_cell(*val as f32 / 4.0, count == self.get_now_week(), self.get_label(&ChartTime::from_str(&format!("{}", count)).unwrap()).map_or(false, |x| x.len() != 0));
+                row.add_cell(self, *val as f32 / 4.0);
             }
             row.set_left(cells.count() as f32 / 4.0);
             context.add_row(row);
@@ -208,5 +209,79 @@ impl RootConfigData {
 
     pub fn is_valid_cell(&self, cell: u32) -> bool {
         cell < 20 * self.weeks
+    }
+
+    // Handle any "nodes" that define config at the root level
+    pub fn read_config(&mut self, mut config: &mut file::ConfigLines) -> Result<()> {
+
+        if let Some(file::Line::Node(file::LineNode { line_num: _, indent: _, name })) =
+            config.get_line() {
+
+            let c = ROOT_NODE_RE.captures(&name).unwrap();
+            if &c["name"] == "global" {
+                self.read_global_config(&mut config).chain_err(|| "Failed to read [global] node")?;
+            } else if &c["name"] == "devs" {
+                self.read_devs_config(&mut config).chain_err(|| "Failed to read [devs] node")?;
+            } else {
+                bail!("Internal error: Unexpected node type");
+            }
+        } else {
+            // Should not have been called without a Node to read.
+            bail!("Internal error: read_root_config called without a node to read");
+        }
+
+        Ok(())
+    }
+
+    /// Store any configuration stored under [global]
+    fn read_global_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
+        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
+            config.peek_line() {
+
+            config.get_line();
+
+            if key == "weeks" {
+                let weeks = value.parse::<u32>()
+                    .chain_err(|| "Error parsing \"weeks\" from [chart] node")?;
+
+                self.set_weeks(weeks);
+            } else if key == "now" {
+                let ct = value.parse::<ChartTime>()
+                    .chain_err(|| "Error parsing \"now\" from [chart] node")?;
+                self.set_now(ct.to_u32());
+            } else if key == "manager" {
+                self.set_manager(&value);
+            } else if key == "label" {
+                self.add_label(&value);
+            } else if key == "start-date" {
+                let dt = value.parse::<ChartDate>()
+                    .chain_err(|| "Error parsing \"start-date\" from [chart] node")?;
+                self.set_start_date(&dt);
+            } else {
+                bail!(format!("Unrecognised attribute \"{}\" in [chart] node", key));
+            }
+        }
+        Ok(())
+    }
+
+    /// Store any configuration stored under [devs]
+    fn read_devs_config(&mut self, config: &mut file::ConfigLines) -> Result<()> {
+        while let Some(file::Line::Attribute(file::LineAttribute { key, value })) =
+            config.peek_line() {
+
+            config.get_line();
+            let cp = value.parse::<ChartPeriod>()
+                    .chain_err(|| format!("Error parsing \"time range\" for \"{}\" in [devs] node", key))?;
+            self.add_developer(&key, &cp).chain_err(|| format!("Error adding \"{}\" in [devs] node", key))?;
+        }
+
+        // Check that the manager has been defined
+        if let Some(ref manager) = self.get_manager() {
+            if !self.is_valid_developer(manager) {
+                bail!(format!("Manager \"{}\" not defined as a dev", manager));
+            }
+        }
+
+        Ok(())
     }
 }

@@ -36,6 +36,9 @@ th.grid { text-align: center; width:2em; }
 td.numbers { text-align: right; font-family: monospace; }
 th.numbers { text-align: right; width:5em; }
 
+td.text { text-align: left; }
+th.text { text-align: left; width:15em; }
+
     </style>
   </head>
 <body>
@@ -44,8 +47,8 @@ th.numbers { text-align: right; width:5em; }
         <thead>
             <tr>
                 <th class="numbers">Who</th>
-                <th>What</th>
-                <th>Notes</th>
+                <th class="text">What</th>
+                <th class="text">Notes</th>
                 <th class="numbers border">Plan</th>
                 <th class="numbers">Gain</th>
                 <th class="numbers">Done</th>
@@ -56,8 +59,8 @@ th.numbers { text-align: right; width:5em; }
             </tr>
             <tr>
                 <th class="numbers"></th>
-                <th></th>
-                <th></th>
+                <th class="text"></th>
+                <th class="text"></th>
                 <th class="numbers border"></th>
                 <th class="numbers"></th>
                 <th class="numbers"></th>
@@ -75,8 +78,8 @@ th.numbers { text-align: right; width:5em; }
             <tr>
             {{/if}}
                 <td class="numbers">{{row.who}}</td>
-                <td>{{{row.what}}}</td>
-                <td>{{{row.notes_html}}}</td>
+                <td class="text">{{{row.what}}}</td>
+                <td class="text">{{{row.notes_html}}}</td>
                 <td class="numbers border">{{{row.plan}}}</td>
                 <td class="numbers">{{{row.gain}}}</td>
                 <td class="numbers">{{{row.done}}}</td>

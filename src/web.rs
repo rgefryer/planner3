@@ -59,17 +59,9 @@ impl TemplateRow {
         }
     }
 
-    pub fn add_cell(&mut self, val: f32, start: bool, label: bool) {
-        let mut styles = "grid".to_string();
-        if start {
-            styles.push_str(" start");
-        } else if label {
-            styles.push_str(" label");
-        } else if self.cells.len() == 0 {
-            styles.push_str(" border");
-        }
-
-        self.cells.push((styles, TemplateRow::format_f32(val)));
+    pub fn add_cell(&mut self, root: &RootConfigData, val: f32) {
+        let style = TemplateContext::cell_border_style(root, 1+self.cells.len() as u32);
+        self.cells.push((style, TemplateRow::format_f32(val)));
     }
 
     pub fn add_note(&mut self, val: &str) {
@@ -189,24 +181,44 @@ impl TemplateContext {
 }
 
 
+fn generate_weekly_output<'a, 'b, 'c>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, 
+                          root_data: &'c RootConfigData,
+                          mut context: &'b mut TemplateContext) -> Result<()> {
+
+    let name = node.data.borrow().name.clone();
+    let line_num = node.data.borrow().line_num;
+    let level = node.data.borrow().level;
+    if let Some(ref node_data) = node.data.borrow().node_data {
+        node_data.generate_weekly_output(root_data, name, line_num, level, &mut context);
+    } else {
+        bail!("Internal error - no node_data");
+    }
+
+    for child in node.children() {
+        generate_weekly_output(child, root_data, context);
+    }
+
+    Ok(())
+}
+
 #[cfg(not(test))]
-fn generate_chart_html(root: &arena_tree::Node<RefCell<nodes::ConfigNode>>) -> Result<Template> {
+fn generate_chart_html<'a>(root: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>) -> Result<Template> {
 
-    if let Some(ref root_data) = root.data.borrow().root_data {
+    let root_node = root.data.borrow();
+    if let Some(ref root_data) = root_node.root_data {
         let mut context = TemplateContext::new(root_data);
-
         root_data.generate_dev_weekly_output(&mut context);
 
-        // Set up row data for nodes
-        //try!(self.display_gantt_internal(self, context));
+        for child in root.children() {
+            generate_weekly_output(child, root_data, &mut context);
+        }
 
         // Do any required preparation before rendering
         context.prepare_html();
 
         return Ok(Template::render("index", &context));
-    } else {
-        bail!("Internal error - no root_data");
     }
+    bail!("No root data defined");
 }
 
 

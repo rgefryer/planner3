@@ -364,4 +364,41 @@ impl NodeConfigData {
 
         Ok(())
     }
+
+    pub fn generate_weekly_output(&self,
+        root_data: &RootConfigData,
+        name: String, 
+        line_num: u32,
+        level: u32,
+        context: &mut web::TemplateContext) -> Result<()> {
+        
+        // Set up row data for self
+        let mut row = web::TemplateRow::new(level,
+                                       line_num,
+                                       &name);
+        let mut count = 0;
+        for val in &self.cells.get_weekly_numbers() {
+            row.add_cell(root_data, *val as f32 / 4.0);
+            count += 1;
+        }
+
+        let done = self.cells
+            .count_range(&ChartPeriod::new(0, root_data.get_now()-1).unwrap()) as f32 / 4.0;
+        row.set_done(done);
+
+        // @@@ Add code to work these out
+        row.set_plan(0.0);
+        row.set_left(0.0);
+        row.set_gain(0.0);
+        row.set_who("???");
+
+        for n in self.notes
+                .iter() {
+            row.add_note(n);
+        }
+
+        context.add_row(row);
+
+        Ok(())
+    }
 }
