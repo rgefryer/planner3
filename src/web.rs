@@ -7,6 +7,8 @@ use arena_tree;
 
 use errors::*;
 use nodes;
+use nodes::data;
+use nodes::root::{RootConfigData, BorderType};
 use file;
 use charttime;
 
@@ -123,16 +125,16 @@ pub struct TemplateContext {
 
 impl TemplateContext {
 
-    fn cell_border_style(root: &nodes::RootConfigData, week: u32) -> String {
+    fn cell_border_style(root: &RootConfigData, week: u32) -> String {
         match root.weekly_left_border(week) {
-            nodes::BorderType::None => "grid".to_string(),
-            nodes::BorderType::Start => "grid border".to_string(),
-            nodes::BorderType::Now => "grid start".to_string(),
-            nodes::BorderType::Label => "grid label".to_string(),
+            BorderType::None => "grid".to_string(),
+            BorderType::Start => "grid border".to_string(),
+            BorderType::Now => "grid start".to_string(),
+            BorderType::Label => "grid label".to_string(),
         }
     }
 
-    pub fn new(root: &nodes::RootConfigData) -> TemplateContext {
+    pub fn new(root: &RootConfigData) -> TemplateContext {
 
         let mut t = TemplateContext { cell_headers: Vec::new(), cell_labels: Vec::new(), rows: Vec::new() };
 

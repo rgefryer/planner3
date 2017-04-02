@@ -28,7 +28,7 @@ mod charttime;
 mod chartdate;
 mod chartperiod;
 mod chartrow;
-mod web;
+mod web;    
 
 // Standard main function for outputting chained errors.  See
 // run() for the actual work.
