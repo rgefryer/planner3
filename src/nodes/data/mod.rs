@@ -292,7 +292,40 @@ impl NodeConfigData {
     }
 
     pub fn get_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
-        None
+
+        let mut found_val: Option<u32> = None;
+        let mut found_suffix: Option<String> = None;
+        for plan_entry in &self.plan {
+            if when >= plan_entry.when  {
+                found_val = Some(plan_entry.plan);
+                if let Some(ref suffix) = plan_entry.suffix {
+                    found_suffix = Some(suffix.clone());
+                } else {
+                    found_suffix = None;
+                }
+            }
+        }
+
+        if let Some(mut plan) = found_val {
+            if let Some(ref suffix) = found_suffix {
+                let mut duration = root.get_weeks() * 20;
+                if let Some(ref d) = *dev {
+                    if let Some(period) = root.get_dev_period(&d) {
+                        duration = period.length();
+                    }
+                }
+                if suffix == "pcy" {
+                    plan = (plan as f32 * duration as f32 / (20.0 * 52.0)).ceil() as u32;
+                } else { // pcm
+                    plan = (plan as f32 * duration as f32 / (20.0 * 52.0 / 12.0)).ceil() as u32;
+                }
+            }
+
+            return Some(plan);
+
+        } else {
+            return None;
+        }
     }
 
     pub fn get_default_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {

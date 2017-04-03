@@ -203,6 +203,14 @@ impl RootConfigData {
         Ok(())
     }
 
+    pub fn get_dev_period(&self, name: &str) -> Option<ChartPeriod> {
+        if !self.developers.contains_key(name) {
+            return None;
+        }
+
+        return Some(self.developers[name].period);
+    }
+
     pub fn is_valid_developer(&self, name: &str) -> bool {
         name == "outsource" || self.developers.contains_key(name)
     }
