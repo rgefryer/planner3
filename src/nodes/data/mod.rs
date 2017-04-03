@@ -161,6 +161,25 @@ impl NodeConfigData {
         }
     }
 
+    pub fn get_dev(&self, root_data: &RootConfigData, node_name: &str) -> Option<String> {
+        if let Some(ref d) = self.dev {
+            Some(d.clone())
+        } else if root_data.is_valid_developer(node_name) {
+            Some(node_name.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn set_dev(&mut self, root: &RootConfigData, dev: &String) -> Result<()> {
+        if !root.is_valid_developer(dev) {
+            bail!(format!("Developer \"{}\" not known", dev));
+        }
+
+        self.dev = Some(dev.clone());
+        Ok(())
+    }
+
     fn set_budget(&mut self, budget: f32) -> Result<()> {
 
         if budget < 0.0 {
@@ -324,15 +343,6 @@ impl NodeConfigData {
         Ok(())
     }
 
-    fn set_dev(&mut self, root: &RootConfigData, dev: &String) -> Result<()> {
-        if !root.is_valid_developer(dev) {
-            bail!(format!("Developer \"{}\" not known", dev));
-        }
-
-        self.dev = Some(dev.clone());
-        Ok(())
-    }
-
     pub fn add_attribute(&mut self, root: &RootConfigData, key: &String, value: &String) -> Result<()> {
 
         if key == "budget" {
@@ -385,12 +395,14 @@ impl NodeConfigData {
         let done = self.cells
             .count_range(&ChartPeriod::new(0, root_data.get_now()-1).unwrap()) as f32 / 4.0;
         row.set_done(done);
+        let dev = self.get_dev(root_data, &name).ok_or("".to_string())?;
+        row.set_who(&dev);
 
         // @@@ Add code to work these out
         row.set_plan(0.0);
         row.set_left(0.0);
         row.set_gain(0.0);
-        row.set_who("???");
+        
 
         for n in self.notes
                 .iter() {

@@ -227,6 +227,40 @@ pub struct ErrorTemplate {
     error: String,
 }
 
+fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b RootConfigData) -> Result<()> {
+
+    // Scan back up the tree, looking for an answer.
+    let mut dev: Option<String> = None;
+    for n in node.ancestors() {
+        let node_name = n.data.borrow().name.clone();
+        if let Some(ref node_data) = n.data.borrow().node_data {
+            if let Some(ref d) = node_data.get_dev(root_data, &node_name) {
+                dev = Some(d.clone());
+                break;
+            }
+        }
+    }
+
+    if let Some(d) = dev {
+        if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+            node_data.set_dev(root_data, &d).chain_err(|| "Failed to derive developer")?;
+        }
+    }
+
+    Ok(())
+}    
+
+fn derive_devs<'a>(root: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>) -> Result<()> {
+
+    let root_node = root.data.borrow();
+    if let Some(ref root_data) = root_node.root_data {
+
+        for child in root.descendants() {
+            derive_dev(child, root_data).chain_err(|| "Failed to derive developer info")?;
+        }
+    }
+    Ok(())
+}
 
 fn get_index_html() -> Result<Template> {
 
@@ -237,6 +271,9 @@ fn get_index_html() -> Result<Template> {
     let arena = typed_arena::Arena::new();
     let root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
         .chain_err(|| "Failed to set up nodes")?;
+
+    // Debug - test traversing the node hierarchy
+    derive_devs(&root).chain_err(|| "Failed to derive dev information")?;
 
     // Only critical errors from now on.  Further problems are displayed in the chart.
     let template = generate_chart_html(&root).chain_err(|| "Error generating output")?;
