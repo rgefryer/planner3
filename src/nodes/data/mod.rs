@@ -136,6 +136,10 @@ pub struct NodeConfigData {
 
     default_plan: Vec<PlanEntry>,
 
+    // Derived plan information
+    initial_plan: Option<u32>,
+    now_plan: Option<u32>,
+
     done: Vec<DoneEntry>,
 
     earliest_start: u32,
@@ -154,6 +158,8 @@ impl NodeConfigData {
             dev: None,
             plan: Vec::new(),
             default_plan: Vec::new(),
+            initial_plan: None,
+            now_plan: None,
             done: Vec::new(),
             earliest_start: 0,
             latest_end: num_cells,
@@ -278,6 +284,21 @@ impl NodeConfigData {
         Ok(())
     }
 
+    /// Store derived information about the plan numbers for this node.
+    pub fn set_derived_plan(&mut self, initial: Option<u32>, now: Option<u32>) -> Result<()> {
+        self.initial_plan = initial;
+        self.now_plan = now;
+        Ok(())
+    }
+
+    pub fn get_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
+        None
+    }
+
+    pub fn get_default_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
+        None
+    }
+
     fn add_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
 
         let c = DONE_RE.captures(done).ok_or(format!("Cannot parse done part: \"{}\"", done))?;
@@ -398,10 +419,16 @@ impl NodeConfigData {
         let dev = self.get_dev(root_data, &name).ok_or("".to_string())?;
         row.set_who(&dev);
 
+        if let Some(p) = self.now_plan {
+            row.set_plan(p as f32 / 4.0);
+
+            if let Some(old_p) = self.initial_plan {
+                row.set_gain((p as i32 - old_p as i32) as f32 / 4.0);
+            }
+        }
+
         // @@@ Add code to work these out
-        row.set_plan(0.0);
         row.set_left(0.0);
-        row.set_gain(0.0);
         
 
         for n in self.notes
