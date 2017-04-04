@@ -1,9 +1,5 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use regex::Regex;
-
-use typed_arena;
-use arena_tree;
 
 use errors::*;
 use file;
@@ -181,9 +177,7 @@ impl RootConfigData {
         for (dev, &DeveloperData{ref cells, period: _}) in &self.developers {
 
             let mut row = web::TemplateRow::new(0, 0, &dev);
-            let mut count = 0;
             for val in &cells.get_weekly_numbers() {
-                count += 1;
                 row.add_cell(self, *val as f32 / 4.0);
             }
             row.set_left(cells.count() as f32 / 4.0);
@@ -260,7 +254,7 @@ impl RootConfigData {
             } else if key == "manager" {
                 self.set_manager(&value);
             } else if key == "label" {
-                self.add_label(&value);
+                self.add_label(&value).chain_err(|| "Failed to add label")?;
             } else if key == "start-date" {
                 let dt = value.parse::<ChartDate>()
                     .chain_err(|| "Error parsing \"start-date\" from [chart] node")?;

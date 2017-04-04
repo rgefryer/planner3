@@ -1,14 +1,7 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
 use regex::Regex;
 
-use typed_arena;
-use arena_tree;
-
 use errors::*;
-use file;
 use charttime::ChartTime;
-use chartdate::ChartDate;
 use chartperiod::ChartPeriod;
 use chartrow::ChartRow;
 use web;
@@ -216,7 +209,7 @@ impl NodeConfigData {
         Ok(())
     }
 
-    fn set_earliest_start(&mut self, root: &RootConfigData, when: &str) -> Result<()> {
+    fn set_earliest_start(&mut self, when: &str) -> Result<()> {
 
         let ct = when.parse::<ChartTime>().chain_err(|| format!("Failed to parse earliest-start \"{}\"", when))?;
         if ct.to_u32() > self.earliest_start {
@@ -226,7 +219,7 @@ impl NodeConfigData {
         Ok(())
     }
 
-    fn set_latest_end(&mut self, root: &RootConfigData, when: &str) -> Result<()> {
+    fn set_latest_end(&mut self, when: &str) -> Result<()> {
 
         let ct = when.parse::<ChartTime>().chain_err(|| format!("Failed to parse latest-end \"{}\"", when))?;
         if ct.end_as_u32() < self.latest_end {
@@ -291,11 +284,11 @@ impl NodeConfigData {
         Ok(())
     }
 
-    pub fn get_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
+    fn get_plan_internal(&self, root: &RootConfigData, dev: &Option<String>, when: u32, vec: &Vec<PlanEntry>) -> Option<u32> {
 
         let mut found_val: Option<u32> = None;
         let mut found_suffix: Option<String> = None;
-        for plan_entry in &self.plan {
+        for plan_entry in vec {
             if when >= plan_entry.when  {
                 found_val = Some(plan_entry.plan);
                 if let Some(ref suffix) = plan_entry.suffix {
@@ -328,8 +321,12 @@ impl NodeConfigData {
         }
     }
 
+    pub fn get_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
+        self.get_plan_internal(root, dev, when, &self.plan)
+    }
+
     pub fn get_default_plan(&self, root: &RootConfigData, dev: &Option<String>, when: u32) -> Option<u32> {
-        None
+        self.get_plan_internal(root, dev, when, &self.default_plan)
     }
 
     fn add_done(&mut self, root: &RootConfigData, done: &str) -> Result<()> {
@@ -419,9 +416,9 @@ impl NodeConfigData {
         } else if key == "done" {
             self.set_done(root, value).chain_err(|| "Failed to set done")?;
         } else if key == "earliest-start" {
-            self.set_earliest_start(root, value).chain_err(|| "Failed to set earliest-start")?;
+            self.set_earliest_start(value).chain_err(|| "Failed to set earliest-start")?;
         } else if key == "latest-end" {
-            self.set_latest_end(root, value).chain_err(|| "Failed to set latest-end")?;
+            self.set_latest_end(value).chain_err(|| "Failed to set latest-end")?;
         } else {
             bail!(format!("Unrecognised attribute \"{}\"", key));
         }
@@ -440,23 +437,22 @@ impl NodeConfigData {
         let mut row = web::TemplateRow::new(level,
                                        line_num,
                                        &name);
-        let mut count = 0;
         for val in &self.cells.get_weekly_numbers() {
             row.add_cell(root_data, *val as f32 / 4.0);
-            count += 1;
         }
 
         let done = self.cells
             .count_range(&ChartPeriod::new(0, root_data.get_now()-1).unwrap()) as f32 / 4.0;
         row.set_done(done);
-        let dev = self.get_dev(root_data, &name).ok_or("".to_string())?;
-        row.set_who(&dev);
+        if let Some(dev) = self.get_dev(root_data, &name) {
+            row.set_who(&dev);
+        }
 
         if let Some(p) = self.now_plan {
             row.set_plan(p as f32 / 4.0);
 
             if let Some(old_p) = self.initial_plan {
-                row.set_gain((p as i32 - old_p as i32) as f32 / 4.0);
+                row.set_gain((old_p as i32 - p as i32) as f32 / 4.0);
             }
         }
 

@@ -119,7 +119,7 @@ impl ConfigLines {
         match NODE_RE.captures(content) {
             Some(c) => {
                 let indent = c["indent"].len();
-                self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"]));
+                self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"].trim()));
             }
             None => {
                 let c = ATTR_RE.captures(content)

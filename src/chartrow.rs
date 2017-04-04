@@ -282,7 +282,7 @@ impl ChartRow {
 
 		  	let mut want_allocated_this_run = 0f64; // Num cells that should be allocated by now
             let free_cells = period.length() as u32 - dest.count_range(period);
-		  	let amount_per_cell = rc.to_transfer() as f64 / period.length() as f64;
+		  	let amount_per_cell = rc.to_transfer() as f64 / free_cells as f64;
 
 		  	// Run through the cells
 		  	transferred_this_run = 0;

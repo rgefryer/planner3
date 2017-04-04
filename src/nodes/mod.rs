@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use regex::Regex;
 
 use typed_arena;
@@ -10,11 +9,6 @@ pub mod data;
 
 use errors::*;
 use file;
-use charttime::ChartTime;
-use chartdate::ChartDate;
-use chartperiod::ChartPeriod;
-use chartrow::ChartRow;
-use web;
 use self::root::RootConfigData;
 use self::data::NodeConfigData;
 
@@ -26,7 +20,6 @@ lazy_static! {
 pub struct ConfigNode {
     pub name: String,
     pub line_num: u32,
-    indent: u32,
     pub level: u32, // Root node is level 0
 
     pub root_data: Option<RootConfigData>,
@@ -34,11 +27,10 @@ pub struct ConfigNode {
 }
 
 impl ConfigNode {
-    fn new(name: &str, level: u32, indent: u32, line_num: u32, is_root: bool, num_cells: u32) -> ConfigNode {
+    fn new(name: &str, level: u32, line_num: u32, is_root: bool, num_cells: u32) -> ConfigNode {
         ConfigNode {
             name: name.to_string(),
             line_num: line_num,
-            indent: indent,
             level: level,
             root_data: if is_root {
                 Some(RootConfigData::new())
@@ -77,7 +69,6 @@ impl ConfigNode {
             arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new("root",
                                                                            0,
                                                                            0,
-                                                                           0,
                                                                            is_root,
                                                                            0))))
         } else {
@@ -87,7 +78,6 @@ impl ConfigNode {
                 node_line_num = line_num;
                 arena.alloc(arena_tree::Node::new(RefCell::new(ConfigNode::new(&name,
                                                                                level,
-                                                                               indent,
                                                                                line_num,
                                                                                is_root,
                                                                                20*root.unwrap().get_weeks()))))
@@ -129,10 +119,10 @@ impl ConfigNode {
             } else {
                 if is_root {
                     if let Some(ref root_data) = node.data.borrow().root_data {
-                        ConfigNode::create_child(node, arena, config, Some(root_data), level+1, line_num)?;                    
+                        ConfigNode::create_child(node, arena, config, Some(root_data), level+1)?;                    
                     }
                 } else {
-                    ConfigNode::create_child(node, arena, config, root, level+1, line_num)?;                    
+                    ConfigNode::create_child(node, arena, config, root, level+1)?;                    
                 }
             }
         }
@@ -144,8 +134,7 @@ impl ConfigNode {
 arena: &'a typed_arena::Arena<arena_tree::Node<'a, RefCell<ConfigNode>>>,
          config: &'b mut file::ConfigLines,
          root: Option<&RootConfigData>,
-         level: u32,
-         line_num: u32        
+         level: u32
      ) -> Result<()> {
 
         let child: &'a arena_tree::Node<'a, RefCell<ConfigNode>> =

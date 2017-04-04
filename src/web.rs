@@ -7,10 +7,8 @@ use arena_tree;
 
 use errors::*;
 use nodes;
-use nodes::data;
 use nodes::root::{RootConfigData, BorderType};
 use file;
-use charttime;
 
 #[derive(Serialize)]
 pub struct TemplateRow {
@@ -130,11 +128,13 @@ impl TemplateContext {
 
         let mut t = TemplateContext { cell_headers: Vec::new(), cell_labels: Vec::new(), rows: Vec::new() };
 
+        // Set up the header details
         for s in 1..root.get_weeks() + 1 {
             let style = TemplateContext::cell_border_style(root, s);
             t.cell_headers.push((style, s.to_string()));
         }
 
+        // Set up the row of labels
         let mut colspan = 0;
         let mut last_style: Option<String> = None;
         let mut last_note: Option<String> = None;
@@ -189,13 +189,13 @@ fn generate_weekly_output<'a, 'b, 'c>(node: &'a arena_tree::Node<'a, RefCell<nod
     let line_num = node.data.borrow().line_num;
     let level = node.data.borrow().level;
     if let Some(ref node_data) = node.data.borrow().node_data {
-        node_data.generate_weekly_output(root_data, name, line_num, level, &mut context);
+        node_data.generate_weekly_output(root_data, name, line_num, level, &mut context)?;
     } else {
         bail!("Internal error - no node_data");
     }
 
     for child in node.children() {
-        generate_weekly_output(child, root_data, context);
+        generate_weekly_output(child, root_data, context)?;
     }
 
     Ok(())
@@ -210,7 +210,7 @@ fn generate_chart_html<'a>(root: &'a arena_tree::Node<'a, RefCell<nodes::ConfigN
         root_data.generate_dev_weekly_output(&mut context);
 
         for child in root.children() {
-            generate_weekly_output(child, root_data, &mut context);
+            generate_weekly_output(child, root_data, &mut context)?;
         }
 
         // Do any required preparation before rendering
@@ -257,24 +257,25 @@ fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>
 fn find_plan_at_time<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b RootConfigData, when: u32) -> Result<Option<u32>> {
 
     // First off, look in this node's plan 
-    let mut plan: Option<String> = None;
     let node_name = node.data.borrow().name.clone();
     if let Some(ref node_data) = node.data.borrow().node_data {
         let dev: Option<String> = node_data.get_dev(root_data, &node_name);
         if let Some(p) = node_data.get_plan(root_data, &dev, when) {
             return Ok(Some(p));
         }
-    }
 
-    // Scan back up the tree, looking for a default plan
-    for n in node.ancestors() {
-        if let Some(ref node_data) = n.data.borrow().node_data {
-            let dev: Option<String> = node_data.get_dev(root_data, &node_name);
-            if let Some(p) = node_data.get_default_plan(root_data, &dev, when) {
-                return Ok(Some(p));
+        // If the node has a dev, scan back up the tree, looking for a default plan
+        if let Some(ref d) = dev {
+            for n in node.ancestors().skip(1) {
+                if let Some(ref node_data) = n.data.borrow().node_data {
+                    if let Some(p) = node_data.get_default_plan(root_data, &Some(d.clone()), when) {
+                        return Ok(Some(p));
+                    }
+                }
             }
         }
     }
+
 
     Ok(None)
 }    
