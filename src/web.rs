@@ -8,6 +8,7 @@ use arena_tree;
 use errors::*;
 use nodes;
 use nodes::root::{RootConfigData, BorderType};
+use nodes::data::ResourcingStrategy;
 use file;
 
 #[derive(Serialize)]
@@ -258,6 +259,37 @@ fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>
     Ok(())
 }    
 
+/// Update the resourcingv information on a node, if necessary inheriting information
+/// from ancestors.
+fn derive_resourcing<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    // Scan back up the tree, looking for an answer.
+    let mut resourcing: Option<ResourcingStrategy> = None;
+    for n in node.ancestors() {
+
+        // Avoid the root node - it is already borrowed.
+        if n.parent().is_none() {
+            break;
+        }
+
+        let node_name = n.data.borrow().name.clone();
+        if let Some(ref node_data) = n.data.borrow().node_data {
+            if let Some(r) = node_data.get_resourcing(root_data, &node_name) {
+                resourcing = Some(r);
+                break;
+            }
+        }
+    }
+
+    if let Some(r) = resourcing {
+        if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+            node_data.set_resourcing(root_data, r).chain_err(|| "Failed to derive resourcing")?;
+        }
+    }
+
+    Ok(())
+}    
+
 /// Find the plan information on a node, if necessary inheriting information
 /// from ancestors.
 fn find_plan_at_time<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b RootConfigData, when: u32) -> Result<Option<u32>> {
@@ -319,6 +351,17 @@ fn transfer_done<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNod
     Ok(())
 }    
 
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+    }
+
+    Ok(())
+}    
+
 /// Call the passed function on all descendants of the passed node.
 fn call_on_children<'a, F>(node_fn: F, root: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>) -> Result<()>
     where F: for<'x, 'y> Fn(&'x arena_tree::Node<'x, RefCell<nodes::ConfigNode>>, &'y mut RootConfigData) -> Result<()> {
@@ -330,7 +373,7 @@ fn call_on_children<'a, F>(node_fn: F, root: &'a arena_tree::Node<'a, RefCell<no
         for child in root.descendants().skip(1) {
             if let Err(ref e) = node_fn(child, root_data) {
                 if let Some(ref mut node_data) = child.data.borrow_mut().node_data {
-                    node_data.add_note(&generate_error_html(e));
+                    node_data.add_note(&generate_error_html(e))?;
                 }
             }
         }
@@ -345,13 +388,15 @@ fn get_index_html() -> Result<Template> {
     let mut config =
         file::ConfigLines::new_from_file("config.txt").chain_err(|| "Failed to read config")?;
     let arena = typed_arena::Arena::new();
-    let mut root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
+    let root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
         .chain_err(|| "Failed to set up nodes")?;
 
     // Set up derived info in the node heirarchy
     call_on_children(derive_dev, &root).chain_err(|| "Failed to derive dev information")?;
     call_on_children(derive_plan, &root).chain_err(|| "Failed to derive plan information")?;
+    call_on_children(derive_resourcing, &root).chain_err(|| "Failed to derive plan information")?;
     call_on_children(transfer_done, &root).chain_err(|| "Failed to transfer done resource")?;
+    call_on_children(transfer_future_resource, &root).chain_err(|| "Failed to transfer future resource")?;
 
     // Only critical errors from now on.  Further problems are displayed in the chart.
     let template = generate_chart_html(&root).chain_err(|| "Error generating output")?;

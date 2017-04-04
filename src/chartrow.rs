@@ -29,7 +29,7 @@ pub struct TransferResult {
 }
 
 impl TransferResult {
-	fn new(to_transfer: u32) -> TransferResult {
+	pub fn new(to_transfer: u32) -> TransferResult {
 		TransferResult {
 			earliest: None,
 			latest: None,
@@ -44,7 +44,7 @@ impl TransferResult {
 
 	fn transfer(&mut self, cell: u32) -> Result<()> {
 		if self.failed == 0 {
-			bail!("Tried to transer too many cells");
+			bail!("Internal Error: Tried to transfer too many cells");
 		}
 
 		self.failed -= 1;
@@ -219,6 +219,9 @@ impl ChartRow {
 					        period: &ChartPeriod) -> Result<TransferResult> {
 
 		let mut rc = TransferResult::new(count);
+        if count == 0 {
+            return Ok(rc);
+        }
 		for cell in period.get_first() .. period.get_last() + 1 {
 	  		if self.is_set(cell) && !dest.is_set(cell) {
 	  			self.unset(cell).chain_err(|| format!("Failed transferring cells from period {:?}", period))?;
@@ -246,6 +249,9 @@ impl ChartRow {
 
 
 		let mut rc = TransferResult::new(count);
+        if count == 0 {
+            return Ok(rc);
+        }
 		let mut cell = period.get_last() - 1;
 		while cell >= period.get_first() {
 
@@ -275,6 +281,9 @@ impl ChartRow {
 								period: &ChartPeriod) -> Result<TransferResult> {
 
 		let mut rc = TransferResult::new(count);
+        if count == 0 {
+            return Ok(rc);
+        }
 	  	let mut transferred_this_run = 1u32;  // Make sure we do at least one pass
 
 	  	// We have an outer loop, in case the initial smear doesn't complete the job

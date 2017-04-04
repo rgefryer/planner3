@@ -3,7 +3,7 @@ use regex::Regex;
 use errors::*;
 use charttime::ChartTime;
 use chartperiod::ChartPeriod;
-use chartrow::ChartRow;
+use chartrow::{ChartRow, TransferResult};
 use web;
 use nodes::root::RootConfigData;
 
@@ -27,7 +27,7 @@ pub enum SchedulingStrategy {
 }
 
 /// Strategy for allocating the budget
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum ResourcingStrategy {
     /// Allocated on a weekly rate, calculated quarterly.
     /// 4 quarters management for every 20 quarters managees
@@ -115,7 +115,7 @@ pub struct NodeConfigData {
 
     scheduling: SchedulingStrategy,
 
-    resourcing: ResourcingStrategy,
+    resourcing: Option<ResourcingStrategy>,
 
     // Flag that this task requires management oversight
     managed: bool,
@@ -146,7 +146,7 @@ impl NodeConfigData {
             notes: Vec::new(), 
             budget: None, 
             scheduling: SchedulingStrategy::Parallel,
-            resourcing: ResourcingStrategy::FrontLoad,
+            resourcing: None,
             managed: true,
             dev: None,
             plan: Vec::new(),
@@ -186,13 +186,100 @@ impl NodeConfigData {
         if let Some(ref dev) = self.dev {
             if let Some(dev_cells) = root.get_dev_cells(dev) {
                 for done in &self.done {
-                    // @@@ Fix this to fit resource into period
-                    let result = dev_cells.fill_transfer_to(&mut self.cells, done.time, &ChartPeriod::new(done.start.to_u32(), done.start.to_u32()+done.time-1).unwrap()).chain_err(|| format!("Failed to add resource at time {}", done.start.to_u32()))?;
+                    let period = if done.time <= done.start.duration() {
+                        ChartPeriod::new(done.start.to_u32(), done.start.end_as_u32()).unwrap()
+                    } else {
+                        ChartPeriod::new(done.start.to_u32(), done.start.to_u32()+done.time-1).unwrap()
+                    };
+
+                    let result = dev_cells.fill_transfer_to(&mut self.cells, done.time, &period).chain_err(|| format!("Failed to add resource at time {}", done.start.to_string()))?;
                     if result.failed != 0 {
                         // @@@ Convert time to weekly format
-                        bail!(format!("Failed to add {} quarters of resource at time {}", result.failed, done.start.to_u32()));
+                        bail!(format!("Failed to add {} quarters of resource at time {}", result.failed, done.start.to_string()));
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Transfer resource specified in "done" from the developer to 
+    /// this node's cells.
+    pub fn transfer_future_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
+
+        if self.now_plan.is_none() {
+            return Ok(());
+        }
+        let plan = self.now_plan.unwrap();   // Total quarters we want set in the row
+
+        if let Some(ref dev) = self.dev {
+            let quarters_in_chart = root.get_weeks() * 20;
+            let chart_period = ChartPeriod::new(1, quarters_in_chart-1).unwrap();
+            let quarters_left_in_plan = if plan > self.cells.count_range(&chart_period) {
+                plan - self.cells.count_range(&chart_period)
+            } else {
+                0
+            };
+            let resource_period = root.get_dev_period(dev).unwrap_or(chart_period);
+            let remaining_period = ChartPeriod::new(root.get_now(), quarters_in_chart-1).unwrap();
+            if let Some(dev_cells) = root.get_dev_cells(dev) {
+
+                // Get allocation type
+                let mut transfer_result = TransferResult::new(quarters_left_in_plan);
+                match self.resourcing {
+                    Some(ResourcingStrategy::Management) => {
+                        // No-op - the management row is handled out-of-band
+                        transfer_result = TransferResult::new(0);
+                    },
+                    Some(ResourcingStrategy::SmearProRata) => {
+
+                        // Work out the time to spend per quarter day on this task
+                        let time_per_quarter = plan as f32 / (resource_period.length() as f32);
+
+                        // Work out the time to spend in the rest of the period
+                        let mut time_to_spend = (remaining_period.length() as f32 * time_per_quarter).ceil();
+
+                        // Subtract any time already committed.
+                        time_to_spend -= self.cells
+                            .count_range(&remaining_period) as f32;
+                        if time_to_spend < -0.01 {
+                            bail!(format!("Over-committed by {} days; update plan",
+                                                   time_to_spend * -1.0));
+                        }
+
+                        // Smear the remainder.
+                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                                                                 time_to_spend as u32,
+                                                                 &remaining_period)?;
+                    },
+                    Some(ResourcingStrategy::SmearRemaining) => {
+                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                                                                      quarters_left_in_plan,
+                                                                      &remaining_period)?;
+                    },
+                    Some(ResourcingStrategy::FrontLoad) => {
+                        transfer_result = dev_cells.fill_transfer_to(&mut self.cells,
+                                                                     quarters_left_in_plan,
+                                                                     &remaining_period)?;
+                    },
+                    Some(ResourcingStrategy::BackLoad) => {
+                        // @@@ Implement it!
+                        bail!("ResourcingStrategy::BackLoad not implemented!");
+                    },
+                    Some(ResourcingStrategy::ProdSFR) => {
+                        // @@@ Implement it!
+                        bail!("ResourcingStrategy::ProdSFR not implemented!");
+                    }
+                    None => {
+                        bail!("ResourcingStrategy not specified!");
+                    }
+                };
+
+                if transfer_result.failed != 0 {
+                    bail!(format!("Failed to allocate {} days", transfer_result.failed as f32 / 4.0));
+                }
+                // @@@ Handle the result - propagation of serialized constraints.
             }
         }
 
@@ -396,21 +483,30 @@ impl NodeConfigData {
     fn set_resource(&mut self, strategy: &str) -> Result<()> {
 
         if strategy == "management" {
-            self.resourcing = ResourcingStrategy::Management;
+            self.resourcing = Some(ResourcingStrategy::Management);
         } else if strategy == "smearprorata" {
-            self.resourcing = ResourcingStrategy::SmearProRata;
+            self.resourcing = Some(ResourcingStrategy::SmearProRata);
         } else if strategy == "smearremaining" {
-            self.resourcing = ResourcingStrategy::SmearRemaining;
+            self.resourcing = Some(ResourcingStrategy::SmearRemaining);
         } else if strategy == "frontload" {
-            self.resourcing = ResourcingStrategy::FrontLoad;
+            self.resourcing = Some(ResourcingStrategy::FrontLoad);
         } else if strategy == "backload" {
-            self.resourcing = ResourcingStrategy::BackLoad;
+            self.resourcing = Some(ResourcingStrategy::BackLoad);
         } else if strategy == "prodsfr" {
-            self.resourcing = ResourcingStrategy::ProdSFR;
+            self.resourcing = Some(ResourcingStrategy::ProdSFR);
         } else {
             bail!(format!("Failed to parse resourcing strategy \"{}\"", strategy))
         }
 
+        Ok(())
+    }
+
+    pub fn get_resourcing(&self, root_data: &RootConfigData, node_name: &str) -> Option<ResourcingStrategy> {
+        self.resourcing
+    }
+
+    pub fn set_resourcing(&mut self, root_data: &RootConfigData, r: ResourcingStrategy) -> Result<()> {
+        self.resourcing = Some(r);
         Ok(())
     }
 

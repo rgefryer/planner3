@@ -3,8 +3,9 @@
 A project planning tool.
 
 ## Next steps for v1
-*  Move committed work into the task rows
-*  Re-integrate gantting-out logic
+*  Re-implement serial resourcing
+*  Re-add management resource
+
 
 ## Later display options
 *  Personal daily spreadsheet
