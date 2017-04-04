@@ -179,6 +179,26 @@ impl NodeConfigData {
         Ok(())
     }
 
+    /// Transfer resource specified in "done" from the developer to 
+    /// this node's cells.
+    pub fn transfer_done(&mut self, root: &mut RootConfigData) -> Result<()> {
+
+        if let Some(ref dev) = self.dev {
+            if let Some(dev_cells) = root.get_dev_cells(dev) {
+                for done in &self.done {
+                    // @@@ Fix this to fit resource into period
+                    let result = dev_cells.fill_transfer_to(&mut self.cells, done.time, &ChartPeriod::new(done.start.to_u32(), done.start.to_u32()+done.time-1).unwrap()).chain_err(|| format!("Failed to add resource at time {}", done.start.to_u32()))?;
+                    if result.failed != 0 {
+                        // @@@ Convert time to weekly format
+                        bail!(format!("Failed to add {} quarters of resource at time {}", result.failed, done.start.to_u32()));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn set_budget(&mut self, budget: f32) -> Result<()> {
 
         if budget < 0.0 {
@@ -189,7 +209,7 @@ impl NodeConfigData {
         Ok(())
     }
 
-    fn add_note(&mut self, note: &str) -> Result<()> {
+    pub fn add_note(&mut self, note: &str) -> Result<()> {
 
         self.notes.push(note.to_string());
 

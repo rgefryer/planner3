@@ -229,11 +229,17 @@ pub struct ErrorTemplate {
 
 /// Update the dev information on a node, if necessary inheriting information
 /// from ancestors.
-fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b RootConfigData) -> Result<()> {
+fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     // Scan back up the tree, looking for an answer.
     let mut dev: Option<String> = None;
     for n in node.ancestors() {
+
+        // Avoid the root node - it is already borrowed.
+        if n.parent().is_none() {
+            break;
+        }
+
         let node_name = n.data.borrow().name.clone();
         if let Some(ref node_data) = n.data.borrow().node_data {
             if let Some(ref d) = node_data.get_dev(root_data, &node_name) {
@@ -267,6 +273,12 @@ fn find_plan_at_time<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::Confi
         // If the node has a dev, scan back up the tree, looking for a default plan
         if let Some(ref d) = dev {
             for n in node.ancestors().skip(1) {
+
+                // Avoid the root node - it is already borrowed.
+                if n.parent().is_none() {
+                    break;
+                }
+                
                 if let Some(ref node_data) = n.data.borrow().node_data {
                     if let Some(p) = node_data.get_default_plan(root_data, &Some(d.clone()), when) {
                         return Ok(Some(p));
@@ -284,7 +296,7 @@ fn find_plan_at_time<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::Confi
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
-fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b RootConfigData) -> Result<()> {
+fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     let p1 = find_plan_at_time(node, root_data, 0).chain_err(|| "Failed to get initial plan")?;
     let p2 = find_plan_at_time(node, root_data, root_data.get_now()).chain_err(|| "Failed to get current plan")?;
@@ -296,15 +308,31 @@ fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>
     Ok(())
 }    
 
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_done<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_done(root_data).chain_err(|| "Failed to set transfer done resource")?;
+    }
+
+    Ok(())
+}    
+
 /// Call the passed function on all descendants of the passed node.
 fn call_on_children<'a, F>(node_fn: F, root: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>) -> Result<()>
-    where F: for<'x, 'y> Fn(&'x arena_tree::Node<'x, RefCell<nodes::ConfigNode>>, &'y RootConfigData) -> Result<()> {
+    where F: for<'x, 'y> Fn(&'x arena_tree::Node<'x, RefCell<nodes::ConfigNode>>, &'y mut RootConfigData) -> Result<()> {
 
-    let root_node = root.data.borrow();
-    if let Some(ref root_data) = root_node.root_data {
+    let mut root_node = root.data.borrow_mut();
+    if let Some(ref mut root_data) = root_node.root_data {
 
+        // Run the passed function on each node.  Write any errors to the node itself.
         for child in root.descendants().skip(1) {
-            node_fn(child, root_data).chain_err(|| "Failed to derive developer info")?;
+            if let Err(ref e) = node_fn(child, root_data) {
+                if let Some(ref mut node_data) = child.data.borrow_mut().node_data {
+                    node_data.add_note(&generate_error_html(e));
+                }
+            }
         }
     }
     Ok(())
@@ -317,21 +345,22 @@ fn get_index_html() -> Result<Template> {
     let mut config =
         file::ConfigLines::new_from_file("config.txt").chain_err(|| "Failed to read config")?;
     let arena = typed_arena::Arena::new();
-    let root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
+    let mut root = nodes::ConfigNode::new_from_config(&arena, &mut config, None, true, 0)
         .chain_err(|| "Failed to set up nodes")?;
 
     // Set up derived info in the node heirarchy
     call_on_children(derive_dev, &root).chain_err(|| "Failed to derive dev information")?;
     call_on_children(derive_plan, &root).chain_err(|| "Failed to derive plan information")?;
+    call_on_children(transfer_done, &root).chain_err(|| "Failed to transfer done resource")?;
 
     // Only critical errors from now on.  Further problems are displayed in the chart.
     let template = generate_chart_html(&root).chain_err(|| "Error generating output")?;
     Ok(template)
 }
 
-/// Unwrap the chained error into one big string, and display it.
+/// Unwrap the chained error into one big string
 #[cfg(not(test))]
-fn generate_error_html(e: &Error) -> Template {
+fn generate_error_html(e: &Error) -> String {
 
     let mut error: String = format!("Error: {}", e);
     for e in e.iter().skip(1) {
@@ -344,7 +373,14 @@ fn generate_error_html(e: &Error) -> Template {
         error = format!("{}<br><br>backtrace: {:?}", error, backtrace);
     }
 
-    Template::render("err", &ErrorTemplate { error })
+    error
+}
+
+/// Unwrap the chained error into one big string, and display it.
+#[cfg(not(test))]
+fn generate_error_page(e: &Error) -> Template {
+
+    Template::render("err", &ErrorTemplate { error: generate_error_html(e) })
 }
 
 #[cfg(not(test))]
@@ -353,7 +389,7 @@ fn index() -> Template {
 
     match get_index_html() {
         Ok(template) => template,
-        Err(e) => generate_error_html(&e)
+        Err(e) => generate_error_page(&e)
     }
 
 }

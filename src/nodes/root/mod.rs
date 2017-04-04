@@ -197,6 +197,14 @@ impl RootConfigData {
         Ok(())
     }
 
+    pub fn get_dev_cells<'a, 'b>(&'a mut self, name: &'b str) -> Option<&'a mut ChartRow> {
+        if !self.developers.contains_key(name) {
+            return None;
+        }
+
+        return Some(&mut self.developers.get_mut(name).unwrap().cells);
+    }
+
     pub fn get_dev_period(&self, name: &str) -> Option<ChartPeriod> {
         if !self.developers.contains_key(name) {
             return None;
