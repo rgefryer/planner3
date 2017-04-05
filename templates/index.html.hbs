@@ -4,7 +4,17 @@
     <meta charset="utf-8" />
     <title>Planner Demo</title>
     <style>
-div.datagrid { overflow: scroll; }
+
+body {width:1500px;}
+.q1, .q2, .q3, .q4 {overflow:hidden; display:block; float:left;}
+.q1 {width:500px; height: 50px;}
+.q2 {width:1000px; height: 50px;}
+.q3 {width:500px; height: 800px;}
+.q4 {width:1000px; height: 800px; overflow:auto;}
+
+.q2 .firstCol, .q3 thead, .q4 thead, .q4 .firstCol {display:none;}
+.container {width:9999px;}
+
 .datagrid table thead th.start { border-left:2px solid red; text-align: left; }
 .datagrid table tbody td.start { border-left:2px solid red; }
 
@@ -40,8 +50,31 @@ td.text { text-align: left; }
 th.text { text-align: left; width:15em; }
 
     </style>
+
+<script src="http://code.jquery.com/jquery-1.7.min.js"></script>
+<script>
+$(document).ready(function(){
+   $('.q4').bind('scroll', fnscroll);
+   $('.q2').html($('.q4').html());
+   $('.q3').html($('.q4').html());
+});
+
+function fnscroll(){
+
+$('.q2').scrollLeft($('.q4').scrollLeft());
+$('.q3').scrollTop($('.q4').scrollTop());
+
+
+}
+
+</script>    
   </head>
 <body>
+ <div class="q1"><div class="container"></div></div>
+ <div class="q2"><div class="container"></div></div>
+ <div class="q3"><div class="container"></div></div>
+ <div class="q4">
+    <div class="container">
 <div class="datagrid">
     <table class="fixed">
         <thead>
@@ -92,7 +125,8 @@ th.text { text-align: left; width:15em; }
         </tbody>
     </table>
 </div>    
-
+            </div>
+         </div>
 </body>
 </html>
 

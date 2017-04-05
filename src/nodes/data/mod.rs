@@ -264,12 +264,24 @@ impl NodeConfigData {
                                                                      &remaining_period)?;
                     },
                     Some(ResourcingStrategy::BackLoad) => {
-                        // @@@ Implement it!
-                        bail!("ResourcingStrategy::BackLoad not implemented!");
+                        transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
+                                                                             quarters_left_in_plan,
+                                                                             &remaining_period)?;
                     },
                     Some(ResourcingStrategy::ProdSFR) => {
-                        // @@@ Implement it!
-                        bail!("ResourcingStrategy::ProdSFR not implemented!");
+                        // Smear 20%, then backfill 80%.  If the smear fails, add the remaining
+                        // work te the backfill.  It's unlikely to help, but we'll end up with 
+                        // an accurate result to display.
+                        let smeared_resource = quarters_left_in_plan * 20 / 100;
+                        let mut backfill_resource = quarters_left_in_plan - smeared_resource;
+
+                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                                                                      smeared_resource,
+                                                                      &remaining_period)?;
+                        backfill_resource += transfer_result.failed;
+                        transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
+                                                                             backfill_resource,
+                                                                             &remaining_period)?;
                     }
                     None => {
                         bail!("ResourcingStrategy not specified!");
