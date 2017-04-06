@@ -103,7 +103,7 @@ impl TemplateRow {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 pub struct TemplateContext {
     // Tuples of (style, content)
     cell_headers: Vec<(String, String)>,
@@ -112,6 +112,11 @@ pub struct TemplateContext {
     cell_labels: Vec<(u32, String, String)>,
 
     rows: Vec<TemplateRow>,
+
+    // Layout parameters
+    chart_width: u32,
+    chart_height: u32,
+
 }
 
 impl TemplateContext {
@@ -127,7 +132,12 @@ impl TemplateContext {
 
     pub fn new(root: &RootConfigData) -> TemplateContext {
 
-        let mut t = TemplateContext { cell_headers: Vec::new(), cell_labels: Vec::new(), rows: Vec::new() };
+        //let mut t = TemplateContext { cell_headers: Vec::new(), cell_labels: Vec::new(), rows: Vec::new(), top_height: 60, left_width: 600 };
+        let mut t = TemplateContext { ..Default::default() };
+
+        // Set up chart dimensions
+        t.chart_width = 9999;
+        t.chart_height = 2000;
 
         // Set up the header details
         for s in 1..root.get_weeks() + 1 {

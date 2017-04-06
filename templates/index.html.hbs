@@ -5,15 +5,16 @@
     <title>Planner Demo</title>
     <style>
 
-body {width:1500px;}
+body {width:100%;}
 .q1, .q2, .q3, .q4 {overflow:hidden; display:block; float:left;}
-.q1 {width:500px; height: 50px;}
-.q2 {width:1000px; height: 50px;}
-.q3 {width:500px; height: 800px;}
-.q4 {width:1000px; height: 800px; overflow:auto;}
+.q1 {width:100px; height: 100px;}
+.q2 {width:100px; height: 100px;}
+.q3 {width:100px; height: 100px;}
+.q4 {width:100px; height: 100px; overflow:auto;}
 
-.q2 .firstCol, .q3 thead, .q4 thead, .q4 .firstCol {display:none;}
-.container {width:9999px;}
+.q3 thead, .q4 thead {visibility:hidden;}
+.q2 .freezecol, .q4 .freezecol {visibility:hidden;}
+.container {width:{{chart_width}}px; height:{{chart_height}}px;}
 
 .datagrid table thead th.start { border-left:2px solid red; text-align: left; }
 .datagrid table tbody td.start { border-left:2px solid red; }
@@ -24,7 +25,7 @@ body {width:1500px;}
 .datagrid table thead th.border { border-left:1px solid black; }
 .datagrid table tbody td.border { border-left:1px solid black; }
 
-.datagrid table { border-collapse: collapse; text-align: left; width: 100%; } 
+.datagrid table { border-collapse: collapse; text-align: left; } 
 .datagrid {font: normal 12px/150% Arial, Helvetica, sans-serif; background: #fff; overflow: hidden; border: 1px solid #A65B1A; -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; }
 .datagrid table td, .datagrid table th { padding: 3px 2px; }
 .datagrid table thead th {background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #A65B1A), color-stop(1, #7F4614) );background:-moz-linear-gradient( center top, #A65B1A 5%, #7F4614 100% );filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#A65B1A', endColorstr='#7F4614');background-color:#A65B1A; color:#FFFFFF; font-size: 15px; font-weight: bold; border-left: 1px solid #BF691E; } 
@@ -41,29 +42,79 @@ table.fixed { table-layout:fixed; }
 table.fixed td { overflow: hidden; }
 
 td.grid { text-align: right; font-family: monospace;}
-th.grid { text-align: center; width:2em; }
+th.grid { text-align: center; width:20px; }
 
 td.numbers { text-align: right; font-family: monospace; }
-th.numbers { text-align: right; width:5em; }
+th.numbers { text-align: right; width:50px; }
 
 td.text { text-align: left; }
-th.text { text-align: left; width:15em; }
+th.text { text-align: left; width:150px; }
 
     </style>
 
 <script src="http://code.jquery.com/jquery-1.7.min.js"></script>
 <script>
+var top_freeze = -1;
+var left_freeze = -1;
+var display_width = 0;
+var display_height = 0;
 $(document).ready(function(){
-   $('.q4').bind('scroll', fnscroll);
-   $('.q2').html($('.q4').html());
-   $('.q3').html($('.q4').html());
+
+    console.log()
+
+    // Work out dimensions of frozen rows/columns
+    $(".heightcheck").each(function (index, domElement) {
+        top_freeze += $(domElement).outerHeight()+1;
+    });
+
+    $(".widthcheck").each(function (index, domElement) {
+        left_freeze += $(domElement).outerWidth()+1;
+    });
+
+    display_width = $(window).width()-20;
+    display_height = $(window).height()-20;
+
+
+    // Set up the div dimensions
+    $('.q1').width(left_freeze).height(top_freeze);
+    $('.q2').width(display_width - left_freeze).height(top_freeze);
+    $('.q3').width(left_freeze).height(display_height - top_freeze);
+    $('.q4').width(display_width - left_freeze).height(display_height - top_freeze);
+
+    // Get scroll events on q4
+    $('.q4').bind('scroll', fnscroll);
+
+    // Copy the q4 data into each div
+    $('.q1').html($('.q4').html());
+    $('.q2').html($('.q4').html());
+    $('.q3').html($('.q4').html());
+
+    // Set the initial scroll position of each div
+    $('.q2').scrollLeft(left_freeze);
+    $('.q4').scrollLeft(left_freeze);
+    $('.q3').scrollTop(top_freeze);
+    $('.q4').scrollTop(top_freeze);
+
+
 });
+
 
 function fnscroll(){
 
-$('.q2').scrollLeft($('.q4').scrollLeft());
-$('.q3').scrollTop($('.q4').scrollTop());
+    if ($('.q4').scrollLeft() < left_freeze) {
+        $('.q2').scrollLeft(left_freeze);
+        $('.q4').scrollLeft(left_freeze);
+    } else {
+        $('.q2').scrollLeft($('.q4').scrollLeft());
+    }
 
+    if ($('.q4').scrollTop() < top_freeze) {
+
+        $('.q3').scrollTop(top_freeze);
+        $('.q4').scrollTop(top_freeze);
+    } else {
+        $('.q3').scrollTop($('.q4').scrollTop());
+    }
 
 }
 
@@ -73,31 +124,30 @@ $('.q3').scrollTop($('.q4').scrollTop());
  <div class="q1"><div class="container"></div></div>
  <div class="q2"><div class="container"></div></div>
  <div class="q3"><div class="container"></div></div>
- <div class="q4">
-    <div class="container">
+ <div class="q4"><div class="container">
 <div class="datagrid">
     <table class="fixed">
         <thead>
             <tr>
-                <th class="numbers">Who</th>
-                <th class="text">What</th>
-                <th class="text">Notes</th>
-                <th class="numbers border">Plan</th>
-                <th class="numbers">Gain</th>
-                <th class="numbers">Done</th>
-                <th class="numbers">Left</th>
+                <th class="numbers freezecol heightcheck widthcheck">Who</th>
+                <th class="text freezecol widthcheck">What</th>
+                <th class="text freezecol widthcheck">Notes</th>
+                <th class="numbers border freezecol widthcheck">Plan</th>
+                <th class="numbers freezecol widthcheck">Gain</th>
+                <th class="numbers freezecol widthcheck">Done</th>
+                <th class="numbers freezecol widthcheck">Left</th>
                 {{#each cell_headers}}
                     <th class="{{this.0}}">{{this.1}}</th>
                 {{/each}}
             </tr>
             <tr>
-                <th class="numbers"></th>
-                <th class="text"></th>
-                <th class="text"></th>
-                <th class="numbers border"></th>
-                <th class="numbers"></th>
-                <th class="numbers"></th>
-                <th class="numbers"></th>
+                <th class="numbers freezecol heightcheck"></th>
+                <th class="text freezecol"></th>
+                <th class="text freezecol"></th>
+                <th class="numbers border freezecol"></th>
+                <th class="numbers freezecol"></th>
+                <th class="numbers freezecol"></th>
+                <th class="numbers freezecol"></th>
                 {{#each cell_labels}}
                     <th colspan={{this.0}} class="{{this.1}}">{{this.2}}</th>
                 {{/each}}
@@ -110,13 +160,13 @@ $('.q3').scrollTop($('.q4').scrollTop());
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers">{{row.who}}</td>
-                <td class="text">{{{row.what}}}</td>
-                <td class="text">{{{row.notes_html}}}</td>
-                <td class="numbers border">{{{row.plan}}}</td>
-                <td class="numbers">{{{row.gain}}}</td>
-                <td class="numbers">{{{row.done}}}</td>
-                <td class="numbers">{{{row.left}}}</td>
+                <td class="numbers freezecol">{{row.who}}</td>
+                <td class="text freezecol">{{{row.what}}}</td>
+                <td class="text freezecol">{{{row.notes_html}}}</td>
+                <td class="numbers border freezecol">{{{row.plan}}}</td>
+                <td class="numbers freezecol">{{{row.gain}}}</td>
+                <td class="numbers freezecol">{{{row.done}}}</td>
+                <td class="numbers freezecol">{{{row.left}}}</td>
                 {{#each row.cells as |c|}}
                     <td class="{{c.0}}">{{{c.1}}}</td>
                 {{/each}}
