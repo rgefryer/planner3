@@ -137,7 +137,9 @@ pub struct NodeConfigData {
 
     earliest_start: u32,
 
-    latest_end: u32
+    latest_end: u32,
+
+    resource_transferred: bool
 }
 
 impl NodeConfigData {
@@ -156,6 +158,7 @@ impl NodeConfigData {
             done: Vec::new(),
             earliest_start: 0,
             latest_end: num_cells,
+            resource_transferred: false,
             cells: ChartRow::new(num_cells)
         }
     }
@@ -204,14 +207,71 @@ impl NodeConfigData {
         Ok(())
     }
 
+    pub fn transfer_done_managed(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if !self.managed {
+            return Ok(());
+        }
+        self.transfer_done(root)
+    }
+    pub fn transfer_done_unmanaged(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if self.managed {
+            return Ok(());
+        }
+        self.transfer_done(root)
+    }
+
+    pub fn transfer_future_unmanaged_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if self.managed {
+            return Ok(());
+        }
+        self.transfer_future_resource(root)
+    }
+
+    pub fn transfer_future_management_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
+
+
+        if let Some(ResourcingStrategy::Management) = self.resourcing {
+
+            if let Some(ref dev) = self.dev {
+
+                // Verify that the manager for this row matches that for the chart
+                if let Some(mgr) = root.get_manager() {
+                    if mgr != *dev {
+                        bail!(format!("\"{}\" is not the configured manager, expected \"{}\"", dev, mgr));
+                    }
+                } else {
+                    bail!("No manager defined in global config");
+                }
+
+                root.transfer_management_resource(&mut self.cells)?;
+            }
+
+            self.resource_transferred = true;
+        }
+
+        Ok(())
+    }
+
+    pub fn transfer_future_remaining_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
+        self.transfer_future_resource(root)
+    }
+
+
     /// Transfer resource specified in "done" from the developer to 
     /// this node's cells.
     pub fn transfer_future_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
 
+        if self.resource_transferred {
+            return Ok(());
+        }
+
         if self.now_plan.is_none() {
             return Ok(());
         }
+
         let plan = self.now_plan.unwrap();   // Total quarters we want set in the row
+
+
 
         if let Some(ref dev) = self.dev {
             let quarters_in_chart = root.get_weeks() * 20;
@@ -234,10 +294,10 @@ impl NodeConfigData {
                     },
                     Some(ResourcingStrategy::SmearProRata) => {
 
-                        // Work out the time to spend per quarter day on this task
+                        // Time to spend per quarter day on this task
                         let time_per_quarter = plan as f32 / (resource_period.length() as f32);
 
-                        // Work out the time to spend in the rest of the period
+                        // Time to spend in the rest of the period
                         let mut time_to_spend = (remaining_period.length() as f32 * time_per_quarter).ceil();
 
                         // Subtract any time already committed.
@@ -252,21 +312,25 @@ impl NodeConfigData {
                         transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
                                                                  time_to_spend as u32,
                                                                  &remaining_period)?;
+                        self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::SmearRemaining) => {
                         transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
                                                                       quarters_left_in_plan,
                                                                       &remaining_period)?;
+                        self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::FrontLoad) => {
                         transfer_result = dev_cells.fill_transfer_to(&mut self.cells,
                                                                      quarters_left_in_plan,
                                                                      &remaining_period)?;
+                        self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::BackLoad) => {
                         transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
                                                                              quarters_left_in_plan,
                                                                              &remaining_period)?;
+                        self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::ProdSFR) => {
                         // Smear 20%, then backfill 80%.  If the smear fails, add the remaining
@@ -282,6 +346,7 @@ impl NodeConfigData {
                         transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
                                                                              backfill_resource,
                                                                              &remaining_period)?;
+                        self.resource_transferred = true;
                     }
                     None => {
                         bail!("ResourcingStrategy not specified!");
@@ -313,6 +378,14 @@ impl NodeConfigData {
         self.notes.push(note.to_string());
 
         Ok(())
+    }
+
+    pub fn get_managed(&self) -> bool {
+        self.managed
+    }
+
+    pub fn set_managed(&mut self, managed: bool)  {
+        self.managed = managed
     }
 
     fn set_non_managed(&mut self, non_managed: &str) -> Result<()> {

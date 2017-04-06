@@ -221,6 +221,72 @@ impl RootConfigData {
         cell < 20 * self.weeks
     }
 
+    // Work out the future, weekly resource needed to manage the non-managers, then 
+    // transfer it from the manager to the row passed in. 
+    //
+    // Caller is responsible for checking that there is a manager configured.
+    pub fn transfer_management_resource(&mut self, mut row: &mut ChartRow) -> Result<()> {
+
+        let quarters_in_chart = self.get_weeks() * 20;
+        let remaining_period = ChartPeriod::new(self.get_now(), quarters_in_chart-1).unwrap();
+        let mut manager: String = String::new();
+        if let Some(ref m) = self.manager {
+            manager = m.clone();
+        }
+
+
+        // Initialize the resource tracking
+        let mut weekly_resource = 0.0f32;
+        let mut total_failures = 0;
+
+
+        for q in 0 .. quarters_in_chart {
+
+            if q < self.get_now() {
+                continue;
+            }
+
+            let mut quarterly_resource = 0.0f32;
+            for (dev, data) in &self.developers {
+                if *dev != manager {
+                    if data.cells.is_set(q) {
+                        quarterly_resource += 0.2;
+                    }
+                } else {
+                    if !data.cells.is_set(q) {
+                        quarterly_resource = 0.0;
+                        break
+                    }
+                }
+            }
+
+            weekly_resource += quarterly_resource;
+
+            // If this was the last day of the week, do the resource transfer
+            if q % 20 == 19 {
+
+                for (dev, ref mut data) in self.developers.iter_mut() {
+                    if *dev == manager {
+                        let transfer_result = data.cells.fill_transfer_to(&mut row,
+                                                                         weekly_resource.ceil() as u32,
+                                                                         &ChartPeriod::new(q-19, q).unwrap())?;
+
+                        total_failures += transfer_result.failed;
+                    }
+                }
+
+                // Reset the resource tracking
+                weekly_resource = 0.0f32;
+            }
+        }
+
+        if total_failures != 0 {
+            bail!(format!("Failed to allocate {} days of management resource", total_failures as f32 / 4.0));
+        }
+
+        Ok(())
+    }
+
     // Handle any "nodes" that define config at the root level
     pub fn read_config(&mut self, mut config: &mut file::ConfigLines) -> Result<()> {
 

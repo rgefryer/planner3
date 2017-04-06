@@ -261,6 +261,31 @@ fn derive_dev<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>
     Ok(())
 }    
 
+/// Update the dev information on a node, if necessary inheriting information
+/// from ancestors.
+fn derive_non_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    // Scan back up the tree, looking for evidence that 
+    for n in node.ancestors().skip(1) {
+
+        // Avoid the root node - it is already borrowed.
+        if n.parent().is_none() {
+            break;
+        }
+
+        if let Some(ref node_data) = n.data.borrow().node_data {
+            if !node_data.get_managed() {
+                if let Some(ref mut this_node_data) = node.data.borrow_mut().node_data {
+                    this_node_data.set_managed(false);
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Update the resourcingv information on a node, if necessary inheriting information
 /// from ancestors.
 fn derive_resourcing<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
@@ -344,10 +369,10 @@ fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
-fn transfer_done<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+fn transfer_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_done(root_data).chain_err(|| "Failed to set transfer done resource")?;
+        node_data.transfer_done_managed(root_data).chain_err(|| "Failed to set transfer done resource")?;
     }
 
     Ok(())
@@ -355,10 +380,43 @@ fn transfer_done<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNod
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
-fn transfer_future_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+        node_data.transfer_done_unmanaged(root_data).chain_err(|| "Failed to set transfer done resource")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_remaining_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_unmanaged_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_unmanaged_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_management_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_management_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
     }
 
     Ok(())
@@ -395,10 +453,14 @@ fn get_index_html() -> Result<Template> {
 
     // Set up derived info in the node heirarchy
     call_on_children(derive_dev, &root).chain_err(|| "Failed to derive dev information")?;
+    call_on_children(derive_non_managed, &root).chain_err(|| "Failed to derive dev information")?;
     call_on_children(derive_plan, &root).chain_err(|| "Failed to derive plan information")?;
     call_on_children(derive_resourcing, &root).chain_err(|| "Failed to derive plan information")?;
-    call_on_children(transfer_done, &root).chain_err(|| "Failed to transfer done resource")?;
-    call_on_children(transfer_future_resource, &root).chain_err(|| "Failed to transfer future resource")?;
+    call_on_children(transfer_done_unmanaged, &root).chain_err(|| "Failed to transfer done resource")?;
+    call_on_children(transfer_future_unmanaged_resource, &root).chain_err(|| "Failed to transfer future resource")?;
+    call_on_children(transfer_future_management_resource, &root).chain_err(|| "Failed to transfer future resource")?;
+    call_on_children(transfer_done_managed, &root).chain_err(|| "Failed to transfer done resource")?;
+    call_on_children(transfer_future_remaining_resource, &root).chain_err(|| "Failed to transfer future resource")?;
 
     // Only critical errors from now on.  Further problems are displayed in the chart.
     let template = generate_chart_html(&root).chain_err(|| "Error generating output")?;
