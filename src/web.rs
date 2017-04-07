@@ -372,7 +372,7 @@ fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>
 fn transfer_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_done_managed(root_data).chain_err(|| "Failed to set transfer done resource")?;
+        node_data.transfer_done_managed(root_data).chain_err(|| "Failed to transfer done resource")?;
     }
 
     Ok(())
@@ -383,7 +383,7 @@ fn transfer_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::C
 fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_done_unmanaged(root_data).chain_err(|| "Failed to set transfer done resource")?;
+        node_data.transfer_done_unmanaged(root_data).chain_err(|| "Failed to transfer done resource")?;
     }
 
     Ok(())
@@ -394,7 +394,7 @@ fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes:
 fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_remaining_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+        node_data.transfer_future_remaining_resource(root_data).chain_err(|| "Failed to transfer future resource (remaining)")?;
     }
 
     Ok(())
@@ -405,7 +405,7 @@ fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, Ref
 fn transfer_future_unmanaged_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_unmanaged_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+        node_data.transfer_future_unmanaged_resource(root_data).chain_err(|| "Failed to transfer future resource (unmanaged)")?;
     }
 
     Ok(())
@@ -416,7 +416,7 @@ fn transfer_future_unmanaged_resource<'a, 'b>(node: &'a arena_tree::Node<'a, Ref
 fn transfer_future_management_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_management_resource(root_data).chain_err(|| "Failed to set transfer futureresource")?;
+        node_data.transfer_future_management_resource(root_data).chain_err(|| "Failed to transfer future resource (management)")?;
     }
 
     Ok(())

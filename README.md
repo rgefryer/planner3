@@ -7,6 +7,17 @@ A project planning tool.
  *  Idea - descend the nodes flagging which to update, then process.
 *  Re-implement serial resourcing
 
+## Sorting out config
+*  Budget heads
+*  Complete Overheads
+   *  Bank Hols
+   *  Mentor/Ramp up
+   *  Hackathon
+   *  Eng Conf
+   *  Other
+*  Fixed Costs
+*  PRDs
+
 
 ## Later display options
 *  Personal daily spreadsheet

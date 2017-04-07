@@ -103,7 +103,7 @@ impl ConfigLines {
         lazy_static! {
             static ref COMMENT_RE: Regex = Regex::new(r"^(?P<content>[^#]*).*$").unwrap();
             static ref BLANK_RE: Regex = Regex::new(r"^\s*$").unwrap();
-            static ref NODE_RE: Regex = Regex::new(r"^(?P<indent>\s*)(?P<name>[\w\]\[/\s]+)$")
+            static ref NODE_RE: Regex = Regex::new(r"^(?P<indent>\s*)(?P<name>[\w\]\[/\s,\.\-]+)$")
                 .unwrap();
             static ref ATTR_RE: Regex =
                 Regex::new(r"^\s*\-\s*(?P<key>[\w\-\./]+)\s*:\s*(?P<value>.*)$").unwrap();
@@ -115,16 +115,16 @@ impl ConfigLines {
             return Ok(());
         }
 
-        // Try to parse as a node, or failing that as an attribute
-        match NODE_RE.captures(content) {
+        // Try to parse as an attribute, or failing that as a node
+        match ATTR_RE.captures(content) {
             Some(c) => {
-                let indent = c["indent"].len();
-                self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"].trim()));
+                self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));
             }
             None => {
-                let c = ATTR_RE.captures(content)
+                let c = NODE_RE.captures(content)
                     .ok_or("Unable to parse line as a node or an attribute")?;
-                self.add_line(Line::new_attribute_line(&c["key"], &c["value"].trim()));
+                let indent = c["indent"].len();
+                self.add_line(Line::new_node_line(line_num, (indent + 1) as u32, &c["name"].trim()));
             }
         };
 
