@@ -103,7 +103,7 @@ impl ConfigLines {
         lazy_static! {
             static ref COMMENT_RE: Regex = Regex::new(r"^(?P<content>[^#]*).*$").unwrap();
             static ref BLANK_RE: Regex = Regex::new(r"^\s*$").unwrap();
-            static ref NODE_RE: Regex = Regex::new(r"^(?P<indent>\s*)(?P<name>[\w\]\[/\s,\.\-]+)$")
+            static ref NODE_RE: Regex = Regex::new(r"^(?P<indent>\s*)(?P<name>[\w\]\[/\s,\.\-\(\)]+)$")
                 .unwrap();
             static ref ATTR_RE: Regex =
                 Regex::new(r"^\s*\-\s*(?P<key>[\w\-\./]+)\s*:\s*(?P<value>.*)$").unwrap();

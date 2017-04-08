@@ -5,6 +5,7 @@ A project planning tool.
 ## Next steps for v1
 *  Phasing resource prediction - mgmt, smear, frontfill, backfill.  Serial phasing all at front-fill time.
  *  Idea - descend the nodes flagging which to update, then process.
+*  Display remaining time
 *  Re-implement serial resourcing
 
 ## Sorting out config
@@ -24,7 +25,7 @@ A project planning tool.
 *  Display "from-now", omitting completed tasks
 *  Display individual PRDs
 *  Display budgets only
-*  Freeze header, 
+*  Historical display - budget and planned numbers changing over time
 
 ## Minor tidy-ups
 *  Sort out formatting on multi-line notes

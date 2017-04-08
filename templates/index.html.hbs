@@ -12,8 +12,6 @@ body {width:100%;}
 .q3 {width:100px; height: 100px;}
 .q4 {width:100px; height: 100px; overflow:auto;}
 
-.q3 thead, .q4 thead {visibility:hidden;}
-.q2 .freezecol, .q4 .freezecol {visibility:hidden;}
 .container {width:9999px; height:9999px;}
 
 .datagrid table thead th.start { border-left:2px solid red; text-align: left; }
@@ -54,8 +52,34 @@ th.text { text-align: left; width:150px; }
 
 <script src="http://code.jquery.com/jquery-1.7.min.js"></script>
 <script>
+function getScrollbarWidth() {
+    var outer = document.createElement("div");
+    outer.style.visibility = "hidden";
+    outer.style.width = "100px";
+    outer.style.msOverflowStyle = "scrollbar"; // needed for WinJS apps
+
+    document.body.appendChild(outer);
+
+    var widthNoScroll = outer.offsetWidth;
+    // force scrollbars
+    outer.style.overflow = "scroll";
+
+    // add innerdiv
+    var inner = document.createElement("div");
+    inner.style.width = "100%";
+    outer.appendChild(inner);        
+
+    var widthWithScroll = inner.offsetWidth;
+
+    // remove divs
+    outer.parentNode.removeChild(outer);
+
+    return widthNoScroll - widthWithScroll;
+}
+
+var scroll_bar_width = 0;
 var top_freeze = -1;
-var left_freeze = -1;
+var left_freeze = 0;
 var table_width = 0;
 var table_height = 0;
 var display_width = 0;
@@ -70,28 +94,27 @@ $(document).ready(function(){
     });
 
     $(".widthcheck").each(function (index, domElement) {
-        left_freeze += $(domElement).outerWidth()+1;
+        left_freeze += $(domElement).outerWidth();
     });
 
-    $(".toprow").each(function (index, domElement) {
-        table_width += $(domElement).outerWidth();
-    });
-
-    $(".firstcol").each(function (index, domElement) {
-        table_height += $(domElement).outerHeight();
-    });
+    table_height = $(".fixed").outerHeight();
+    table_width = $(".fixed").outerWidth();
 
     $('.container').width(table_width).height(table_height);
 
+    scroll_bar_width = getScrollbarWidth();
 
+    // The 20s give a little padding round the table, and account
+    // for some irregularities that I never tried to dig into.
     display_width = $(window).width()-20;
     display_height = $(window).height()-20;
 
 
-    // Set up the div dimensions
+    // Set up the div dimensions.  Quadrants 2 and 3 are sized to
+    // finish level with the q4 scroll bars.
     $('.q1').width(left_freeze).height(top_freeze);
-    $('.q2').width(display_width - left_freeze - 15).height(top_freeze);
-    $('.q3').width(left_freeze).height(display_height - top_freeze - 17);
+    $('.q2').width(display_width - left_freeze - scroll_bar_width).height(top_freeze);
+    $('.q3').width(left_freeze).height(display_height - top_freeze - scroll_bar_width);
     $('.q4').width(display_width - left_freeze).height(display_height - top_freeze);
 
     // Get scroll events on q4
@@ -142,44 +165,62 @@ function fnscroll(){
     <table class="fixed">
         <thead>
             <tr>
-                <th class="numbers freezecol heightcheck widthcheck toprow firstcol">Who</th>
-                <th class="text freezecol widthcheck toprow">What</th>
-                <th class="text freezecol widthcheck toprow">Notes</th>
-                <th class="numbers border freezecol widthcheck toprow">Plan</th>
-                <th class="numbers freezecol widthcheck toprow">Gain</th>
-                <th class="numbers freezecol widthcheck toprow">Done</th>
-                <th class="numbers freezecol widthcheck toprow">Left</th>
+                <th class="numbers heightcheck widthcheck">Who</th>
+                <th class="text widthcheck">What</th>
+                <th class="text widthcheck">Notes</th>
+                <th class="numbers border widthcheck">Plan</th>
+                <th class="numbers widthcheck">Gain</th>
+                <th class="numbers widthcheck">Done</th>
+                <th class="numbers widthcheck">Left</th>
                 {{#each cell_headers}}
-                    <th class="{{this.0}} toprow">{{this.1}}</th>
+                    <th class="{{this.0}}">{{this.1}}</th>
                 {{/each}}
             </tr>
             <tr>
-                <th class="numbers freezecol heightcheck firstcol"></th>
-                <th class="text freezecol"></th>
-                <th class="text freezecol"></th>
-                <th class="numbers border freezecol"></th>
-                <th class="numbers freezecol"></th>
-                <th class="numbers freezecol"></th>
-                <th class="numbers freezecol"></th>
+                <th class="numbers heightcheck"></th>
+                <th class="text"></th>
+                <th class="text"></th>
+                <th class="numbers border"></th>
+                <th class="numbers"></th>
+                <th class="numbers"></th>
+                <th class="numbers"></th>
                 {{#each cell_labels}}
                     <th colspan={{this.0}} class="{{this.1}}">{{this.2}}</th>
                 {{/each}}
             </tr>
         </thead>
         <tbody>
+        {{#each resource_rows as |row|}}
+           {{#if row.even}}
+            <tr class="alt">
+            {{else}}
+            <tr>
+            {{/if}}
+                <td class="numbers heightcheck">{{row.who}}</td>
+                <td class="text">{{{row.what}}}</td>
+                <td class="text">{{{row.notes_html}}}</td>
+                <td class="numbers border">{{{row.plan}}}</td>
+                <td class="numbers">{{{row.gain}}}</td>
+                <td class="numbers">{{{row.done}}}</td>
+                <td class="numbers">{{{row.left}}}</td>
+                {{#each row.cells as |c|}}
+                    <td class="{{c.0}}">{{{c.1}}}</td>
+                {{/each}}
+            </tr>
+        {{/each}}
         {{#each rows as |row|}}
            {{#if row.even}}
             <tr class="alt">
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers freezecol firstcol">{{row.who}}</td>
-                <td class="text freezecol">{{{row.what}}}</td>
-                <td class="text freezecol">{{{row.notes_html}}}</td>
-                <td class="numbers border freezecol">{{{row.plan}}}</td>
-                <td class="numbers freezecol">{{{row.gain}}}</td>
-                <td class="numbers freezecol">{{{row.done}}}</td>
-                <td class="numbers freezecol">{{{row.left}}}</td>
+                <td class="numbers">{{row.who}}</td>
+                <td class="text">{{{row.what}}}</td>
+                <td class="text">{{{row.notes_html}}}</td>
+                <td class="numbers border">{{{row.plan}}}</td>
+                <td class="numbers">{{{row.gain}}}</td>
+                <td class="numbers">{{{row.done}}}</td>
+                <td class="numbers">{{{row.left}}}</td>
                 {{#each row.cells as |c|}}
                     <td class="{{c.0}}">{{{c.1}}}</td>
                 {{/each}}

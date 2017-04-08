@@ -111,6 +111,7 @@ pub struct TemplateContext {
     // Tuples of (colspan, style, content)
     cell_labels: Vec<(u32, String, String)>,
 
+    resource_rows: Vec<TemplateRow>,
     rows: Vec<TemplateRow>,
 
 }
@@ -171,12 +172,20 @@ impl TemplateContext {
         t
     }
 
+    pub fn add_resource_row(&mut self, mut row: TemplateRow) {
+        row.even = self.resource_rows.len() % 2 == 1;
+        self.resource_rows.push(row);
+    }
+
     pub fn add_row(&mut self, mut row: TemplateRow) {
-        row.even = self.rows.len() % 2 == 1;
+        row.even = (self.rows.len() + self.resource_rows.len()) % 2 == 1;
         self.rows.push(row);
     }
 
     fn prepare_html(&mut self) {
+        for row in &mut self.resource_rows {
+            row.prepare_html();
+        }
         for row in &mut self.rows {
             row.prepare_html();
         }
@@ -391,6 +400,39 @@ fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes:
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
+fn transfer_future_smear<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_smear(root_data).chain_err(|| "Failed to transfer future resource (smeared)")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_frontload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_frontload(root_data).chain_err(|| "Failed to transfer future resource (frontload)")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_backload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_backload(root_data).chain_err(|| "Failed to transfer future resource (backload)")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
 fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
@@ -460,6 +502,11 @@ fn get_index_html() -> Result<Template> {
     call_on_children(transfer_future_unmanaged_resource, &root).chain_err(|| "Failed to transfer future resource")?;
     call_on_children(transfer_future_management_resource, &root).chain_err(|| "Failed to transfer future resource")?;
     call_on_children(transfer_done_managed, &root).chain_err(|| "Failed to transfer done resource")?;
+
+    call_on_children(transfer_future_smear, &root).chain_err(|| "Failed to transfer future smeared resource")?;
+    call_on_children(transfer_future_backload, &root).chain_err(|| "Failed to transfer future backloaded resource")?;
+    call_on_children(transfer_future_frontload, &root).chain_err(|| "Failed to transfer future frontloaded resource")?;
+    
     call_on_children(transfer_future_remaining_resource, &root).chain_err(|| "Failed to transfer future resource")?;
 
     // Only critical errors from now on.  Further problems are displayed in the chart.

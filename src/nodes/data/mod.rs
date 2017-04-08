@@ -68,6 +68,7 @@ pub enum ResourcingStrategy {
     /// remaining costs are smeared, and the other 80% are back-
     /// filled at the end of the period.
     ProdSFR,
+    ProdSFR_part2,
 }
 
 struct PlanEntry {
@@ -220,11 +221,49 @@ impl NodeConfigData {
         self.transfer_done(root)
     }
 
+    pub fn transfer_future_smear(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if self.resourcing.is_none() {
+            return Ok(());
+        }
+        let r = self.resourcing.unwrap();
+        if r == ResourcingStrategy::SmearRemaining || r == ResourcingStrategy::SmearProRata || r == ResourcingStrategy::ProdSFR {
+            return self.transfer_future_resource(root, Some(r));
+        }
+
+        Ok(())
+    }
+
+    pub fn transfer_future_frontload(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if self.resourcing.is_none() {
+            return Ok(());
+        }
+        let r = self.resourcing.unwrap();
+        if r == ResourcingStrategy::FrontLoad {
+            return self.transfer_future_resource(root, Some(r));
+        }
+
+        Ok(())
+    }
+
+    pub fn transfer_future_backload(&mut self, root: &mut RootConfigData) -> Result<()> {
+        if self.resourcing.is_none() {
+            return Ok(());
+        }
+        let r = self.resourcing.unwrap();
+        if r == ResourcingStrategy::BackLoad {
+            return self.transfer_future_resource(root, Some(r));
+        } else if r == ResourcingStrategy::ProdSFR {
+            return self.transfer_future_resource(root, Some(ResourcingStrategy::ProdSFR_part2));
+        }
+
+        Ok(())
+    }
+
     pub fn transfer_future_unmanaged_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
         if self.managed {
             return Ok(());
         }
-        self.transfer_future_resource(root)
+        self.transfer_future_resource(root, None)
     }
 
     pub fn transfer_future_management_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
@@ -253,13 +292,13 @@ impl NodeConfigData {
     }
 
     pub fn transfer_future_remaining_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
-        self.transfer_future_resource(root)
+        self.transfer_future_resource(root, None)
     }
 
 
     /// Transfer resource specified in "done" from the developer to 
     /// this node's cells.
-    pub fn transfer_future_resource(&mut self, root: &mut RootConfigData) -> Result<()> {
+    pub fn transfer_future_resource(&mut self, root: &mut RootConfigData, resourcing: Option<ResourcingStrategy>) -> Result<()> {
 
         if self.resource_transferred {
             return Ok(());
@@ -282,12 +321,27 @@ impl NodeConfigData {
                 0
             };
             let resource_period = root.get_dev_period(dev).unwrap_or(chart_period);
-            let remaining_period = ChartPeriod::new(root.get_now(), quarters_in_chart-1).unwrap();
+            let remaining_period_opt = ChartPeriod::new(root.get_now(), quarters_in_chart-1).unwrap().intersect(&resource_period);
+            if remaining_period_opt.is_none() {
+                if quarters_left_in_plan == 0 {
+                    return Ok(());
+                } else {
+                    bail!(format!("Failed to write {} days because {} is not available.", quarters_left_in_plan as f32 / 4.0, dev));
+                }
+            }
+            let remaining_period = remaining_period_opt.unwrap();
+
             if let Some(dev_cells) = root.get_dev_cells(dev) {
 
                 // Get allocation type
                 let mut transfer_result = TransferResult::new(quarters_left_in_plan);
-                match self.resourcing {
+                let mut r = if resourcing.is_none() {
+                    self.resourcing
+                } else {
+                    resourcing
+                };
+
+                match r {
                     Some(ResourcingStrategy::Management) => {
                         // No-op - the management row is handled out-of-band
                         transfer_result = TransferResult::new(0);
@@ -337,15 +391,18 @@ impl NodeConfigData {
                         // work te the backfill.  It's unlikely to help, but we'll end up with 
                         // an accurate result to display.
                         let smeared_resource = quarters_left_in_plan * 20 / 100;
-                        let mut backfill_resource = quarters_left_in_plan - smeared_resource;
 
                         transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
                                                                       smeared_resource,
-                                                                      &remaining_period)?;
-                        backfill_resource += transfer_result.failed;
+                                                                      &remaining_period).chain_err(|| "Failed to smear initial 20%")?;
+
+                        // Don't flag resource transferred yet until part 2 has been done
+                    }
+                    Some(ResourcingStrategy::ProdSFR_part2) => {
+                        // Backfill the remaining resource.
                         transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
-                                                                             backfill_resource,
-                                                                             &remaining_period)?;
+                                                                             quarters_left_in_plan,
+                                                                             &remaining_period).chain_err(|| "Failed to backfill 80%")?;
                         self.resource_transferred = true;
                     }
                     None => {

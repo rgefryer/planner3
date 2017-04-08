@@ -181,7 +181,7 @@ impl RootConfigData {
                 row.add_cell(self, *val as f32 / 4.0);
             }
             row.set_left(cells.count() as f32 / 4.0);
-            context.add_row(row);
+            context.add_resource_row(row);
         }
     }
 
