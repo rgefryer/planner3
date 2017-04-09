@@ -165,9 +165,10 @@ function fnscroll(){
     <table class="fixed">
         <thead>
             <tr>
-                <th class="numbers heightcheck widthcheck">Who</th>
-                <th class="text widthcheck">What</th>
+                <th class="numbers heightcheck widthcheck">Line</th>
                 <th class="text widthcheck">Notes</th>
+                <th class="text widthcheck">What</th>
+                <th class="numbers widthcheck">Who</th>
                 <th class="numbers border widthcheck">Plan</th>
                 <th class="numbers widthcheck">Gain</th>
                 <th class="numbers widthcheck">Done</th>
@@ -180,6 +181,7 @@ function fnscroll(){
                 <th class="numbers heightcheck"></th>
                 <th class="text"></th>
                 <th class="text"></th>
+                <th class="numbers"></th>
                 <th class="numbers border"></th>
                 <th class="numbers"></th>
                 <th class="numbers"></th>
@@ -196,9 +198,10 @@ function fnscroll(){
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers heightcheck">{{row.who}}</td>
-                <td class="text">{{{row.what}}}</td>
+                <td class="numbers heightcheck"></td>
                 <td class="text">{{{row.notes_html}}}</td>
+                <td class="text">Resource remaining</td>
+                <td class="numbers">{{row.what}}</td>
                 <td class="numbers border">{{{row.plan}}}</td>
                 <td class="numbers">{{{row.gain}}}</td>
                 <td class="numbers">{{{row.done}}}</td>
@@ -214,9 +217,10 @@ function fnscroll(){
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers">{{row.who}}</td>
-                <td class="text">{{{row.what}}}</td>
+                <td class="numbers">{{row.line_num}}</td>
                 <td class="text">{{{row.notes_html}}}</td>
+                <td class="text">{{{row.what}}}</td>
+                <td class="numbers">{{row.who}}</td>
                 <td class="numbers border">{{{row.plan}}}</td>
                 <td class="numbers">{{{row.gain}}}</td>
                 <td class="numbers">{{{row.done}}}</td>

@@ -188,7 +188,7 @@ impl NodeConfigData {
     pub fn transfer_done(&mut self, root: &mut RootConfigData) -> Result<()> {
 
         if let Some(ref dev) = self.dev {
-            if let Some(dev_cells) = root.get_dev_cells(dev) {
+            if let Some(dev_data) = root.get_dev_data(dev) {
                 for done in &self.done {
                     let period = if done.time <= done.start.duration() {
                         ChartPeriod::new(done.start.to_u32(), done.start.end_as_u32()).unwrap()
@@ -196,7 +196,7 @@ impl NodeConfigData {
                         ChartPeriod::new(done.start.to_u32(), done.start.to_u32()+done.time-1).unwrap()
                     };
 
-                    let result = dev_cells.fill_transfer_to(&mut self.cells, done.time, &period).chain_err(|| format!("Failed to add resource at time {}", done.start.to_string()))?;
+                    let result = dev_data.cells.fill_transfer_to(&mut self.cells, done.time, &period).chain_err(|| format!("Failed to add resource at time {}", done.start.to_string()))?;
                     if result.failed != 0 {
                         // @@@ Convert time to weekly format
                         bail!(format!("Failed to add {} quarters of resource at time {}", result.failed, done.start.to_string()));
@@ -310,8 +310,6 @@ impl NodeConfigData {
 
         let plan = self.now_plan.unwrap();   // Total quarters we want set in the row
 
-
-
         if let Some(ref dev) = self.dev {
             let quarters_in_chart = root.get_weeks() * 20;
             let chart_period = ChartPeriod::new(1, quarters_in_chart-1).unwrap();
@@ -331,7 +329,7 @@ impl NodeConfigData {
             }
             let remaining_period = remaining_period_opt.unwrap();
 
-            if let Some(dev_cells) = root.get_dev_cells(dev) {
+            if let Some(dev_data) = root.get_dev_data(dev) {
 
                 // Get allocation type
                 let mut transfer_result = TransferResult::new(quarters_left_in_plan);
@@ -363,25 +361,25 @@ impl NodeConfigData {
                         }
 
                         // Smear the remainder.
-                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.smear_transfer_to(&mut self.cells,
                                                                  time_to_spend as u32,
                                                                  &remaining_period)?;
                         self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::SmearRemaining) => {
-                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.smear_transfer_to(&mut self.cells,
                                                                       quarters_left_in_plan,
                                                                       &remaining_period)?;
                         self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::FrontLoad) => {
-                        transfer_result = dev_cells.fill_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.fill_transfer_to(&mut self.cells,
                                                                      quarters_left_in_plan,
                                                                      &remaining_period)?;
                         self.resource_transferred = true;
                     },
                     Some(ResourcingStrategy::BackLoad) => {
-                        transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.reverse_fill_transfer_to(&mut self.cells,
                                                                              quarters_left_in_plan,
                                                                              &remaining_period)?;
                         self.resource_transferred = true;
@@ -392,7 +390,7 @@ impl NodeConfigData {
                         // an accurate result to display.
                         let smeared_resource = quarters_left_in_plan * 20 / 100;
 
-                        transfer_result = dev_cells.smear_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.smear_transfer_to(&mut self.cells,
                                                                       smeared_resource,
                                                                       &remaining_period).chain_err(|| "Failed to smear initial 20%")?;
 
@@ -400,7 +398,7 @@ impl NodeConfigData {
                     }
                     Some(ResourcingStrategy::ProdSFR_part2) => {
                         // Backfill the remaining resource.
-                        transfer_result = dev_cells.reverse_fill_transfer_to(&mut self.cells,
+                        transfer_result = dev_data.cells.reverse_fill_transfer_to(&mut self.cells,
                                                                              quarters_left_in_plan,
                                                                              &remaining_period).chain_err(|| "Failed to backfill 80%")?;
                         self.resource_transferred = true;
@@ -411,7 +409,8 @@ impl NodeConfigData {
                 };
 
                 if transfer_result.failed != 0 {
-                    bail!(format!("Failed to allocate {} days", transfer_result.failed as f32 / 4.0));
+                    dev_data.unallocated += transfer_result.failed;
+                    bail!(format!("{} days unallocated", transfer_result.failed as f32 / 4.0));
                 }
                 // @@@ Handle the result - propagation of serialized constraints.
             }
@@ -585,6 +584,9 @@ impl NodeConfigData {
         let time = c["time"].parse::<f32>().chain_err(|| format!("Failed to parse done duration \"{}\" from done", &c["time"]))?;
         let time_q = (time*4.0).round() as u32;
 
+        if time_q == 0 {
+            bail!("Specified done time as 0");
+        }
 
         if !root.is_valid_cell(date.to_u32() + time_q - 1) {
             bail!(format!("Done time period \"{}\" falls outside the chart", done));

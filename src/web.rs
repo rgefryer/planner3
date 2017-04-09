@@ -29,10 +29,11 @@ pub struct TemplateRow {
 impl TemplateRow {
     pub fn new(indent: u32, line_num: u32, name: &str) -> TemplateRow {
         TemplateRow {
-            what: format!("{}{}",
-                          format!("{:width$}", " ", width = (indent * 3) as usize),
+            what: if indent == 0 { name.to_string() } else {
+                  format!("{}{}",
+                            &format!("{:width$}", " ", width = (indent * 3) as usize),
                           name)
-                    .replace(" ", "&nbsp;"),
+                    .replace(" ", "&nbsp;") },
             who: "".to_string(),
             done: " ".to_string(),
             gain: " ".to_string(),
@@ -90,16 +91,17 @@ impl TemplateRow {
             return;
         }
 
-        self.notes_html.push_str(&format!("Node at line {}", self.line_num));
-
+        let mut first = true;
         for note in &self.notes {
             // @@@ Improve formatting on multi-line notes
+            if !first {
+                self.notes_html.push_str("<br>");
+            }
 
-            self.notes_html.push_str("<br>");
             self.notes_html.push_str(&note);
+
+            first = false;
         }
-
-
     }
 }
 
@@ -403,7 +405,7 @@ fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes:
 fn transfer_future_smear<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_smear(root_data).chain_err(|| "Failed to transfer future resource (smeared)")?;
+        node_data.transfer_future_smear(root_data)?;
     }
 
     Ok(())
@@ -414,7 +416,7 @@ fn transfer_future_smear<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::C
 fn transfer_future_frontload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_frontload(root_data).chain_err(|| "Failed to transfer future resource (frontload)")?;
+        node_data.transfer_future_frontload(root_data)?;
     }
 
     Ok(())
@@ -425,7 +427,7 @@ fn transfer_future_frontload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<node
 fn transfer_future_backload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_backload(root_data).chain_err(|| "Failed to transfer future resource (backload)")?;
+        node_data.transfer_future_backload(root_data)?;
     }
 
     Ok(())
@@ -436,7 +438,7 @@ fn transfer_future_backload<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes
 fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_remaining_resource(root_data).chain_err(|| "Failed to transfer future resource (remaining)")?;
+        node_data.transfer_future_remaining_resource(root_data)?;
     }
 
     Ok(())
@@ -447,7 +449,7 @@ fn transfer_future_remaining_resource<'a, 'b>(node: &'a arena_tree::Node<'a, Ref
 fn transfer_future_unmanaged_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_unmanaged_resource(root_data).chain_err(|| "Failed to transfer future resource (unmanaged)")?;
+        node_data.transfer_future_unmanaged_resource(root_data)?;
     }
 
     Ok(())
@@ -458,7 +460,7 @@ fn transfer_future_unmanaged_resource<'a, 'b>(node: &'a arena_tree::Node<'a, Ref
 fn transfer_future_management_resource<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_future_management_resource(root_data).chain_err(|| "Failed to transfer future resource (management)")?;
+        node_data.transfer_future_management_resource(root_data)?;
     }
 
     Ok(())
@@ -518,7 +520,7 @@ fn get_index_html() -> Result<Template> {
 #[cfg(not(test))]
 fn generate_error_html(e: &Error) -> String {
 
-    let mut error: String = format!("Error: {}", e);
+    let mut error: String = format!("{}", e);
     for e in e.iter().skip(1) {
         error = format!("{}<br>caused by: {}", error, e);
     }

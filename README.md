@@ -3,10 +3,9 @@
 A project planning tool.
 
 ## Next steps for v1
-*  Phasing resource prediction - mgmt, smear, frontfill, backfill.  Serial phasing all at front-fill time.
- *  Idea - descend the nodes flagging which to update, then process.
 *  Display remaining time
 *  Re-implement serial resourcing
+ *  Idea - descend the nodes flagging which to update, then process.
 
 ## Sorting out config
 *  Budget heads
@@ -21,6 +20,7 @@ A project planning tool.
 
 
 ## Later display options
+*  Slip/gain from last week
 *  Personal daily spreadsheet
 *  Display "from-now", omitting completed tasks
 *  Display individual PRDs

@@ -15,18 +15,21 @@ lazy_static! {
     static ref LABEL_RE: Regex = Regex::new(r"^(?:(?P<date>\d+(?:/\d){0,2}):\s*)(?P<text>.*)$").unwrap();
 }
 
-struct DeveloperData {
+pub struct DeveloperData {
 
     // Unallocated resource for this person
-    cells: ChartRow,
+    pub cells: ChartRow,
+
+    // Cells that we've failed to allocate for this dev
+    pub unallocated: u32,
 
     // Period for which this dev is available
-    period: ChartPeriod
+    pub period: ChartPeriod
 }
 
 impl DeveloperData {
     fn new(cells: u32, period: &ChartPeriod) -> Result<DeveloperData> {
-        let mut data = DeveloperData { cells: ChartRow::new(cells), period: *period };
+        let mut data = DeveloperData { cells: ChartRow::new(cells), period: *period, unallocated: 0 };
         data.cells.set_range(period).chain_err(|| "Developer time range not valid")?;
 
         Ok(data)
@@ -174,13 +177,23 @@ impl RootConfigData {
     pub fn generate_dev_weekly_output(&self, context: &mut web::TemplateContext) {
 
         // Set up row data for people
-        for (dev, &DeveloperData{ref cells, period: _}) in &self.developers {
+        for (dev, &DeveloperData{ref cells, ref period, unallocated}) in &self.developers {
 
             let mut row = web::TemplateRow::new(0, 0, &dev);
             for val in &cells.get_weekly_numbers() {
                 row.add_cell(self, *val as f32 / 4.0);
             }
-            row.set_left(cells.count() as f32 / 4.0);
+
+            let remaining_period = ChartPeriod::new(self.get_now(), self.get_weeks() * 20 - 1).unwrap();
+
+            row.set_left(cells.count_range(&remaining_period) as f32 / 4.0);
+
+            let slack = cells.count_range(&remaining_period) as i32 - unallocated as i32;
+
+            if slack != 0 {
+                row.set_gain(slack as f32 / 4.0);
+            }
+
             context.add_resource_row(row);
         }
     }
@@ -197,12 +210,12 @@ impl RootConfigData {
         Ok(())
     }
 
-    pub fn get_dev_cells<'a, 'b>(&'a mut self, name: &'b str) -> Option<&'a mut ChartRow> {
+    pub fn get_dev_data<'a, 'b>(&'a mut self, name: &'b str) -> Option<&'a mut DeveloperData> {
         if !self.developers.contains_key(name) {
             return None;
         }
 
-        return Some(&mut self.developers.get_mut(name).unwrap().cells);
+        return self.developers.get_mut(name);
     }
 
     pub fn get_dev_period(&self, name: &str) -> Option<ChartPeriod> {
