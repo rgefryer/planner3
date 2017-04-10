@@ -21,6 +21,7 @@ pub struct TemplateRow {
     plan: String,
     gain: String,
     even: bool,
+    add_style: String,
     notes: Vec<String>,
     notes_html: String,
     cells: Vec<(String, String)>,
@@ -29,6 +30,7 @@ pub struct TemplateRow {
 impl TemplateRow {
     pub fn new(indent: u32, line_num: u32, name: &str) -> TemplateRow {
         TemplateRow {
+            // Indent is 0 on the resource rows
             what: if indent == 0 { name.to_string() } else {
                   format!("{}{}",
                             &format!("{:width$}", " ", width = (indent * 3) as usize),
@@ -37,6 +39,8 @@ impl TemplateRow {
             who: "".to_string(),
             done: " ".to_string(),
             gain: " ".to_string(),
+            add_style: if indent == 1 { " budget".to_string() }
+                       else { String::new() },
             line_num: line_num,
             left: " ".to_string(),
             plan: " ".to_string(),
@@ -60,7 +64,8 @@ impl TemplateRow {
     }
 
     pub fn add_cell(&mut self, root: &RootConfigData, val: f32) {
-        let style = TemplateContext::cell_border_style(root, 1+self.cells.len() as u32);
+        let mut style = TemplateContext::cell_border_style(root, 1+self.cells.len() as u32);
+
         self.cells.push((style, TemplateRow::format_f32(val)));
     }
 

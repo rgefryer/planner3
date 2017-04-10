@@ -48,6 +48,9 @@ th.numbers { text-align: right; width:50px; }
 td.text { text-align: left; }
 th.text { text-align: left; width:150px; }
 
+.datagrid table tbody td.resource { font-weight: bold; }
+.datagrid table tbody td.budget { font-size: 15px; font-weight: bold; }
+
     </style>
 
 <script src="http://code.jquery.com/jquery-1.7.min.js"></script>
@@ -198,16 +201,16 @@ function fnscroll(){
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers heightcheck"></td>
-                <td class="text">{{{row.notes_html}}}</td>
-                <td class="text">Resource remaining</td>
-                <td class="numbers">{{row.what}}</td>
-                <td class="numbers border">{{{row.plan}}}</td>
-                <td class="numbers">{{{row.gain}}}</td>
-                <td class="numbers">{{{row.done}}}</td>
-                <td class="numbers">{{{row.left}}}</td>
+                <td class="resource numbers heightcheck"></td>
+                <td class="resource text">{{{row.notes_html}}}</td>
+                <td class="resource text">Resource remaining</td>
+                <td class="resource numbers">{{row.what}}</td>
+                <td class="resource numbers border">{{{row.plan}}}</td>
+                <td class="resource numbers">{{{row.gain}}}</td>
+                <td class="resource numbers">{{{row.done}}}</td>
+                <td class="resource numbers">{{{row.left}}}</td>
                 {{#each row.cells as |c|}}
-                    <td class="{{c.0}}">{{{c.1}}}</td>
+                    <td class="resource {{c.0}}">{{{c.1}}}</td>
                 {{/each}}
             </tr>
         {{/each}}
@@ -217,16 +220,16 @@ function fnscroll(){
             {{else}}
             <tr>
             {{/if}}
-                <td class="numbers">{{row.line_num}}</td>
-                <td class="text">{{{row.notes_html}}}</td>
-                <td class="text">{{{row.what}}}</td>
-                <td class="numbers">{{row.who}}</td>
-                <td class="numbers border">{{{row.plan}}}</td>
-                <td class="numbers">{{{row.gain}}}</td>
-                <td class="numbers">{{{row.done}}}</td>
-                <td class="numbers">{{{row.left}}}</td>
+                <td class="numbers{{row.add_style}}">{{row.line_num}}</td>
+                <td class="text{{row.add_style}}">{{{row.notes_html}}}</td>
+                <td class="text{{row.add_style}}">{{{row.what}}}</td>
+                <td class="numbers{{row.add_style}}">{{row.who}}</td>
+                <td class="numbers{{row.add_style}} border">{{{row.plan}}}</td>
+                <td class="numbers{{row.add_style}}">{{{row.gain}}}</td>
+                <td class="numbers{{row.add_style}}">{{{row.done}}}</td>
+                <td class="numbers{{row.add_style}}">{{{row.left}}}</td>
                 {{#each row.cells as |c|}}
-                    <td class="{{c.0}}">{{{c.1}}}</td>
+                    <td class="{{c.0}}{{row.add_style}}">{{{c.1}}}</td>
                 {{/each}}
             </tr>
         {{/each}}
