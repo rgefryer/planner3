@@ -226,6 +226,18 @@ impl RootConfigData {
         return Some(self.developers[name].period);
     }
 
+    pub fn get_plan_dev_duration(&self, dev: &Option<String>) -> u32 {
+
+        let mut duration = self.weeks * 20;
+        if let Some(ref d) = *dev {
+            if let Some(period) = self.get_dev_period(&d) {
+                duration = period.length();
+            }
+        }
+
+        duration
+    }
+
     pub fn is_valid_developer(&self, name: &str) -> bool {
         name == "outsource" || self.developers.contains_key(name)
     }

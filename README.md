@@ -3,7 +3,6 @@
 A project planning tool.
 
 ## Next steps for v1
-*  Display remaining time
 *  Re-implement serial resourcing
  *  Idea - descend the nodes flagging which to update, then process.
 

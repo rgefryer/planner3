@@ -185,11 +185,20 @@ impl NodeConfigData {
 
     /// Transfer resource specified in "done" from the developer to 
     /// this node's cells.
-    pub fn transfer_done(&mut self, root: &mut RootConfigData) -> Result<()> {
+    pub fn transfer_done(&mut self, root: &mut RootConfigData, past: bool) -> Result<()> {
 
+        let now = root.get_now();
         if let Some(ref dev) = self.dev {
             if let Some(dev_data) = root.get_dev_data(dev) {
                 for done in &self.done {
+
+                    if past && done.start.to_u32() >= now {
+                        continue;
+                    }
+                    if !past && done.start.to_u32() < now {
+                        continue;
+                    }
+
                     let period = if done.time <= done.start.duration() {
                         ChartPeriod::new(done.start.to_u32(), done.start.end_as_u32()).unwrap()
                     } else {
@@ -208,17 +217,20 @@ impl NodeConfigData {
         Ok(())
     }
 
-    pub fn transfer_done_managed(&mut self, root: &mut RootConfigData) -> Result<()> {
+    pub fn transfer_past_done(&mut self, root: &mut RootConfigData) -> Result<()> {
+        self.transfer_done(root, true)
+    }
+    pub fn transfer_future_done_managed(&mut self, root: &mut RootConfigData) -> Result<()> {
         if !self.managed {
             return Ok(());
         }
-        self.transfer_done(root)
+        self.transfer_done(root, false)
     }
-    pub fn transfer_done_unmanaged(&mut self, root: &mut RootConfigData) -> Result<()> {
+    pub fn transfer_future_done_unmanaged(&mut self, root: &mut RootConfigData) -> Result<()> {
         if self.managed {
             return Ok(());
         }
-        self.transfer_done(root)
+        self.transfer_done(root, false)
     }
 
     pub fn transfer_future_smear(&mut self, root: &mut RootConfigData) -> Result<()> {
@@ -312,7 +324,7 @@ impl NodeConfigData {
 
         if let Some(ref dev) = self.dev {
             let quarters_in_chart = root.get_weeks() * 20;
-            let chart_period = ChartPeriod::new(1, quarters_in_chart-1).unwrap();
+            let chart_period = ChartPeriod::new(0, quarters_in_chart-1).unwrap();
             let quarters_left_in_plan = if plan > self.cells.count_range(&chart_period) {
                 plan - self.cells.count_range(&chart_period)
             } else {
@@ -549,12 +561,7 @@ impl NodeConfigData {
 
         if let Some(mut plan) = found_val {
             if let Some(ref suffix) = found_suffix {
-                let mut duration = root.get_weeks() * 20;
-                if let Some(ref d) = *dev {
-                    if let Some(period) = root.get_dev_period(&d) {
-                        duration = period.length();
-                    }
-                }
+                let duration = root.get_plan_dev_duration(dev);
                 if suffix == "pcy" {
                     plan = (plan as f32 * duration as f32 / (20.0 * 52.0)).ceil() as u32;
                 } else { // pcm
@@ -686,9 +693,42 @@ impl NodeConfigData {
         Ok(())
     }
 
+    // Work out the pro-rata plan at a given date
+    pub fn pro_rata_plan_at_date(&self, when: u32, plan: u32, root: &RootConfigData) -> u32 {
+
+        // First off, get the per-cell resource allocation
+        let duration = root.get_plan_dev_duration(&self.dev);
+        let work_per_cell = plan as f32 / duration as f32;
+
+        // Work out work remaining
+        let period = ChartPeriod::new(when, root.get_weeks() * 20 - 1).unwrap();
+        let mut cells_remaining = period.length();
+        if let Some(ref d) = self.dev {
+            if let Some(ref dp) = root.get_dev_period(d) {
+                if let Some(p) = period.intersect(dp) {
+                    cells_remaining = p.length();
+                } else {
+                    cells_remaining = 0;
+                }
+            }
+        }
+
+        let work_remaining = cells_remaining as f32 * work_per_cell;
+        let work_remaining = work_remaining.ceil() as u32;
+
+        if when == 0 {
+            return work_remaining;
+        }
+
+        let time_until_now = ChartPeriod::new(0, when-1).unwrap();
+        let done = self.cells.count_range(&time_until_now);
+
+        done + work_remaining
+    }
+
     pub fn generate_weekly_output(&self,
         root_data: &RootConfigData,
-        name: String, 
+        node_name: String, 
         line_num: u32,
         level: u32,
         context: &mut web::TemplateContext) -> Result<()> {
@@ -696,29 +736,62 @@ impl NodeConfigData {
         // Set up row data for self
         let mut row = web::TemplateRow::new(level,
                                        line_num,
-                                       &name);
+                                       &node_name);
         for val in &self.cells.get_weekly_numbers() {
             row.add_cell(root_data, *val as f32 / 4.0);
         }
 
-        let done = self.cells
-            .count_range(&ChartPeriod::new(0, root_data.get_now()-1).unwrap()) as f32 / 4.0;
-        row.set_done(done);
-        if let Some(dev) = self.get_dev(root_data, &name) {
+        let time_until_now = ChartPeriod::new(0, root_data.get_now()-1).unwrap();
+        let done = self.cells.count_range(&time_until_now);
+        row.set_done(done as f32 / 4.0);
+        if let Some(dev) = self.get_dev(root_data, &node_name) {
             row.set_who(&dev);
         }
 
         if let Some(p) = self.now_plan {
-            row.set_plan(p as f32 / 4.0);
 
-            if let Some(old_p) = self.initial_plan {
-                row.set_gain((old_p as i32 - p as i32) as f32 / 4.0);
+            if let Some(ResourcingStrategy::SmearProRata) = self.resourcing {
+                // For pro-rata resourcing, the plan value must be calculated,
+                // from the actual past, plus pro-rata-ing the future.
+
+
+                let new_plan = self.pro_rata_plan_at_date(root_data.get_now(), p, root_data);
+
+                row.set_plan(new_plan as f32 / 4.0);
+
+                if let Some(old_p) = self.initial_plan {
+                    let old_plan = self.pro_rata_plan_at_date(0, old_p, root_data);
+                    row.set_gain((old_plan as i32 - new_plan as i32) as f32 / 4.0);
+                }
+
+                if self.cells.count() > new_plan {
+                    row.add_note(&format!("Overspent by {}", (self.cells.count() - new_plan) as f32 / 4.0));
+                }
+
+                let left: i32 = new_plan as i32 - done as i32;
+                if left != 0 {
+                    row.set_left(left as f32 / 4.0);
+                }
+
+            } else {
+                // For most resourcing strategies, the value in the plan
+                // is fixed.
+                row.set_plan(p as f32 / 4.0);
+
+                if let Some(old_p) = self.initial_plan {
+                    row.set_gain((old_p as i32 - p as i32) as f32 / 4.0);
+                }
+
+                if self.cells.count() > p {
+                    row.add_note(&format!("Overspent by {}", (self.cells.count() - p) as f32 / 4.0));
+                }
+
+                let left: i32 = p as i32 - done as i32;
+                if left != 0 {
+                    row.set_left(left as f32 / 4.0);
+                }
             }
         }
-
-        // @@@ Add code to work these out
-        row.set_left(0.0);
-        
 
         for n in self.notes
                 .iter() {

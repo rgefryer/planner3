@@ -380,10 +380,10 @@ fn derive_plan<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
-fn transfer_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+fn transfer_past_done<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_done_managed(root_data).chain_err(|| "Failed to transfer done resource")?;
+        node_data.transfer_past_done(root_data).chain_err(|| "Failed to transfer done resource")?;
     }
 
     Ok(())
@@ -391,10 +391,21 @@ fn transfer_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::C
 
 /// Update the plan information on a node, if necessary inheriting information
 /// from ancestors.
-fn transfer_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+fn transfer_future_done_managed<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
 
     if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
-        node_data.transfer_done_unmanaged(root_data).chain_err(|| "Failed to transfer done resource")?;
+        node_data.transfer_future_done_managed(root_data).chain_err(|| "Failed to transfer done resource")?;
+    }
+
+    Ok(())
+}    
+
+/// Update the plan information on a node, if necessary inheriting information
+/// from ancestors.
+fn transfer_future_done_unmanaged<'a, 'b>(node: &'a arena_tree::Node<'a, RefCell<nodes::ConfigNode>>, root_data: &'b mut RootConfigData) -> Result<()> {
+
+    if let Some(ref mut node_data) = node.data.borrow_mut().node_data {
+        node_data.transfer_future_done_unmanaged(root_data).chain_err(|| "Failed to transfer done resource")?;
     }
 
     Ok(())
@@ -498,12 +509,13 @@ fn get_index_html() -> Result<Template> {
     // Set up derived info in the node heirarchy
     call_on_children(derive_dev, &root).chain_err(|| "Failed to derive dev information")?;
     call_on_children(derive_non_managed, &root).chain_err(|| "Failed to derive dev information")?;
-    call_on_children(derive_plan, &root).chain_err(|| "Failed to derive plan information")?;
     call_on_children(derive_resourcing, &root).chain_err(|| "Failed to derive plan information")?;
-    call_on_children(transfer_done_unmanaged, &root).chain_err(|| "Failed to transfer done resource")?;
+    call_on_children(transfer_past_done, &root).chain_err(|| "Failed to transfer past done resource")?;
+    call_on_children(derive_plan, &root).chain_err(|| "Failed to derive plan information")?;
+    call_on_children(transfer_future_done_unmanaged, &root).chain_err(|| "Failed to transfer done resource")?;
     call_on_children(transfer_future_unmanaged_resource, &root).chain_err(|| "Failed to transfer future resource")?;
     call_on_children(transfer_future_management_resource, &root).chain_err(|| "Failed to transfer future resource")?;
-    call_on_children(transfer_done_managed, &root).chain_err(|| "Failed to transfer done resource")?;
+    call_on_children(transfer_future_done_managed, &root).chain_err(|| "Failed to transfer done resource")?;
 
     call_on_children(transfer_future_smear, &root).chain_err(|| "Failed to transfer future smeared resource")?;
     call_on_children(transfer_future_backload, &root).chain_err(|| "Failed to transfer future backloaded resource")?;
